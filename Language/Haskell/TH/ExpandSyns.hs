@@ -3,7 +3,8 @@
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                       expandSyns
                                       -- * Misc utilities
-                                     ,substInType,evades,evade) where
+                                     ,substInType, substInCon
+                                     ,evades,evade) where
     
 import Language.Haskell.TH hiding(cxt)
 import Data.Set as Set    
@@ -78,7 +79,7 @@ expandSyns =
                       
 
 
-
+-- | Capture-free substitution
 substInType :: (Name, Type) -> Type -> Type
 substInType (v, t) = go
     where
@@ -88,18 +89,8 @@ substInType (v, t) = go
                     | otherwise = s
       go ArrowT = ArrowT
       go ListT = ListT
-      go s@(ForallT vars cxt body) 
-          | v `elem` vars = s -- shadowed
-          | otherwise = 
-              let
-                  -- prevent capture
-                  freshes = evades vars t
-                  substs = zip vars (VarT <$> freshes)
-                  doSubsts x = foldr substInType x substs
-                               
-              in
-                ForallT freshes (fmap (go . doSubsts) cxt ) 
-                                (     (go . doSubsts) body)
+      go (ForallT vars cxt body) = 
+          commonForallCase (v,t) ForallT substInType (vars,cxt,body)
                         
       go s@(TupleT _) = s
 
@@ -116,12 +107,6 @@ substInType (v, t) = go
 --                    (v "x" `AppT` v "y"))
 
                         
--- | Make a list of names (based on the first arg) such that every name in the result
--- is distinct from every name in the second arg, and from the other results
-evades :: (Data t) => [Name] -> t -> [Name]
-evades ns t = foldr c [] ns
-    where
-      c n rec = evade n (rec,t) : rec
 
         
 
@@ -139,7 +124,50 @@ evade n t =
         bump = mkName . ('f':) . nameBase
     in
       go n
+         
+-- | Make a list of names (based on the first arg) such that every name in the result
+-- is distinct from every name in the second arg, and from the other results
+evades :: (Data t) => [Name] -> t -> [Name]
+evades ns t = foldr c [] ns
+    where
+      c n rec = evade n (rec,t) : rec
 
 -- evadeTest = let v = mkName "x"
 --             in
 --               evade v (AppT (VarT v) (VarT (mkName "fx")))
+
+substInCon :: (Name, Type) -> Con -> Con
+substInCon (v,t) = go
+    where
+      st = substInType (v,t)
+
+      go (NormalC n ts) = NormalC n [(x, st y) | (x,y) <- ts]
+      go (RecC n ts) = RecC n [(x, y, st z) | (x,y,z) <- ts]
+      go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
+      go (ForallC vars cxt body) = 
+          commonForallCase (v,t) ForallC substInCon (vars,cxt,body)
+
+
+
+
+
+
+commonForallCase :: (Name,Type) 
+                 -> ([Name] -> Cxt -> a -> a) 
+                 -> ((Name,Type) -> a -> a)
+                 -> ([Name],Cxt,a)
+                 -> a
+commonForallCase (v,t) forallCon bodySubst (vars,cxt,body)
+          | v `elem` vars = forallCon vars cxt body -- shadowed
+          | otherwise = 
+              let
+                  -- prevent capture
+                  freshes = evades vars t
+                  substs = zip vars (VarT <$> freshes)
+                  doSubsts f x = foldr f x substs
+                               
+              in
+                forallCon 
+                  freshes 
+                  (fmap (substInType (v,t) . doSubsts substInType) cxt ) 
+                  (     (  bodySubst (v,t) . doSubsts bodySubst  ) body)
