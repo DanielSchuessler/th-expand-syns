@@ -1,6 +1,9 @@
 {-# OPTIONS -Wall #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-module Language.Haskell.TH.ExpandSyns where
+module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
+                                      expandSyns
+                                      -- * Misc utilities
+                                     ,substInType,evades,evade) where
     
 import Language.Haskell.TH hiding(cxt)
 import Data.Set as Set    
@@ -100,17 +103,17 @@ substInType (v, t) = go
                         
       go s@(TupleT _) = s
 
-testCapture :: Type
-testCapture = 
-    let 
-        n = mkName
-        v = VarT . mkName
-    in
-      substInType (n "x", v "y" `AppT` v "z")
-                  (ForallT 
-                   [n "y",n "z"] 
-                   [ConT (mkName "Show") `AppT` v "x" `AppT` v "z"]
-                   (v "x" `AppT` v "y"))
+-- testCapture :: Type
+-- testCapture = 
+--     let 
+--         n = mkName
+--         v = VarT . mkName
+--     in
+--       substInType (n "x", v "y" `AppT` v "z")
+--                   (ForallT 
+--                    [n "y",n "z"] 
+--                    [ConT (mkName "Show") `AppT` v "x" `AppT` v "z"]
+--                    (v "x" `AppT` v "y"))
 
                         
 -- | Make a list of names (based on the first arg) such that every name in the result
