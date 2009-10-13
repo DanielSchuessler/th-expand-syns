@@ -1,5 +1,5 @@
 name:                th-expand-syns
-version:             0.1
+version:             0.1.0.1
 synopsis:            Expands type synonyms in Template Haskell ASTs
 description:         Expands type synonyms in Template Haskell ASTs
 category:            Template Haskell
@@ -13,7 +13,7 @@ extra-source-files:  testing/Main.hs
 
 source-repository head
  type: darcs
- location: http://code.haskell.org/~daniels/th-expans-syns
+ location: http://code.haskell.org/~daniels/th-expand-syns
 
 Library
     build-depends:       base >= 4 && < 5, template-haskell, syb, containers
