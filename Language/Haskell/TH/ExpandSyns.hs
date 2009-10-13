@@ -1,4 +1,5 @@
-{-# OPTIONS -Wall #-}
+{-# OPTIONS -Wall -fno-warn-unused-binds #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                       expandSyns
@@ -9,10 +10,46 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
 import Language.Haskell.TH hiding(cxt)
 import Data.Set as Set    
 import Data.Generics
+import Control.Monad
+    
+    
+-- Compatibility layer for TH 2.4 vs. 2.3
+tyVarBndrGetName :: TyVarBndr -> Name
+mapPred :: (Type -> Type) -> Pred -> Pred
+bindPred :: (Type -> Q Type) -> Pred -> Q Pred
+tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
+                   
+#if __GLASGOW_HASKELL__ >= 611
+tyVarBndrGetName (PlainTV n) = n
+tyVarBndrGetName (KindedTV n _) = n
+                                
+mapPred f (ClassP n ts) = ClassP n (f <$> ts)
+mapPred f (EqualP t1 t2) = EqualP (f t1) (f t2)
+                            
+bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
+bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
+                            
+tyVarBndrSetName n (PlainTV _) = PlainTV n
+tyVarBndrSetName n (KindedTV _ k) = KindedTV n k 
+#else
+
+type TyVarBndr = Name
+type Pred = Type
+tyVarBndrGetName = id
+mapPred = id
+bindPred = id
+tyVarBndrSetName n _ = n
+                       
+#endif
+
+substInPred :: (Name, Type) -> Pred -> Pred
+substInPred s = mapPred (substInType s)
 
 
 (<$>) :: (Functor f) => (a -> b) -> f a -> f b
 (<$>) = fmap
+(<*>) :: (Monad m) => m (a -> b) -> m a -> m b
+(<*>) = ap
 
 type SynInfo = ([Name],Type)
 
@@ -29,9 +66,10 @@ decIsSyn :: Dec -> Maybe SynInfo
 decIsSyn (ClassD _ _ _ _ _) = Nothing
 decIsSyn (DataD _ _ _ _ _) = Nothing
 decIsSyn (NewtypeD _ _ _ _ _) = Nothing
-decIsSyn (TySynD _ vars t) = Just (vars,t)
+decIsSyn (TySynD _ vars t) = Just (tyVarBndrGetName <$> vars,t)
 decIsSyn x = error ("decIsSyn: unexpected dec: "++show x)
 
+-- | Expands type synonyms...
 expandSyns :: Type -> Q Type
 expandSyns = 
     (\t ->
@@ -47,7 +85,7 @@ expandSyns =
       go acc x@(VarT _) = return (acc, x)
                           
       go [] (ForallT ns cxt t) = do
-        cxt' <- mapM expandSyns cxt
+        cxt' <- mapM (bindPred expandSyns) cxt
         t' <- expandSyns t
         return ([],ForallT ns cxt' t')
 
@@ -76,8 +114,13 @@ expandSyns =
                       in
                         go (drop (length vars) acc) expanded
                         
-                      
 
+#if __GLASGOW_HASKELL__ >= 611
+      go acc (SigT t kind) = 
+          do
+            (acc',t') <- go acc t
+            return (acc',SigT t' kind)
+#endif
 
 -- | Capture-free substitution
 substInType :: (Name, Type) -> Type -> Type
@@ -93,6 +136,10 @@ substInType (v, t) = go
           commonForallCase (v,t) ForallT substInType (vars,cxt,body)
                         
       go s@(TupleT _) = s
+                        
+#if __GLASGOW_HASKELL__ >= 611
+      go (SigT t1 kind) = SigT (go t1) kind
+#endif
 
 -- testCapture :: Type
 -- testCapture = 
@@ -153,21 +200,23 @@ substInCon (v,t) = go
 
 
 commonForallCase :: (Name,Type) 
-                 -> ([Name] -> Cxt -> a -> a) 
+                 -> ([TyVarBndr] -> Cxt -> a -> a) 
                  -> ((Name,Type) -> a -> a)
-                 -> ([Name],Cxt,a)
+                 -> ([TyVarBndr],Cxt,a)
                  -> a
-commonForallCase (v,t) forallCon bodySubst (vars,cxt,body)
-          | v `elem` vars = forallCon vars cxt body -- shadowed
+commonForallCase (v,t) forallCon bodySubst (bndrs,cxt,body)
+          | v `elem` (tyVarBndrGetName <$> bndrs) = forallCon bndrs cxt body -- shadowed
           | otherwise = 
               let
                   -- prevent capture
+                  vars = tyVarBndrGetName <$> bndrs
                   freshes = evades vars t
+                  freshTyVarBndrs = zipWith tyVarBndrSetName freshes bndrs
                   substs = zip vars (VarT <$> freshes)
                   doSubsts f x = foldr f x substs
                                
               in
                 forallCon 
-                  freshes 
-                  (fmap (substInType (v,t) . doSubsts substInType) cxt ) 
+                  freshTyVarBndrs
+                  (fmap (substInPred (v,t) . doSubsts substInPred) cxt ) 
                   (     (  bodySubst (v,t) . doSubsts bodySubst  ) body)

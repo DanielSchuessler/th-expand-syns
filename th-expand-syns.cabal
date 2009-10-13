@@ -1,7 +1,7 @@
 name:                th-expand-syns
 version:             0.1
-synopsis:            Expand type synonyms in template haskell ASTs
-description:         Expand type synonyms in template haskell ASTs
+synopsis:            Expands type synonyms in Template Haskell ASTs
+description:         Expands type synonyms in Template Haskell ASTs
 category:            Template Haskell
 license:             BSD3
 license-file:        LICENSE
