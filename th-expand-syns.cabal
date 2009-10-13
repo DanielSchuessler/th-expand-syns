@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Daniel Schüssler
 maintainer:          daniels@community.haskell.org
-cabal-version:       >= 1.2
+cabal-version:       >= 1.6
 build-type:          Simple
 extra-source-files:  testing/Main.hs
 
@@ -16,6 +16,6 @@ source-repository head
  location: http://code.haskell.org/~daniels/th-expans-syns
 
 Library
-    build-depends:       base >= 4, template-haskell, syb, containers
+    build-depends:       base >= 4 && < 5, template-haskell, syb, containers
     ghc-options:         
     exposed-modules:     Language.Haskell.TH.ExpandSyns
