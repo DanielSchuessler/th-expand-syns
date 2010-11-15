@@ -1,9 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE KindSignatures #-}
-module Tests where
+module Main where
 
-import ExpandSyns
+import Language.Haskell.TH.ExpandSyns
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
     
@@ -14,7 +14,15 @@ type B f = forall x. f x
 type C f = f Integer
 
 
-foo = $(    lift . show 
-            =<< expandSyns 
-            =<< [t| (forall a. Show a => a -> B [] -> (Int,C [])) |]
-       )
+test1 = $(
+    do
+      t1 <-       [t| forall a. Show a => a -> B []            -> (Int,C []) |]
+      expected <- [t| forall a. Show a => a -> (forall x. [] x) -> (Int,[] Integer) |]
+      report False ("expected: "++pprint expected)
+      actual <- expandSyns t1
+      report False ("actual: "++pprint actual)
+      if (pprint expected==pprint actual) then [| putStrLn "Ok" |] else [| error "expected /= actual" |] 
+
+ )
+
+main = test1
