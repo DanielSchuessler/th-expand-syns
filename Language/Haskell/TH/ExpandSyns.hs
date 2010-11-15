@@ -11,6 +11,9 @@ import Language.Haskell.TH hiding(cxt)
 import Data.Set as Set    
 import Data.Generics
 import Control.Monad
+
+packagename :: String
+packagename = "th-expand-syns"
     
     
 -- Compatibility layer for TH 2.4 vs. 2.3
@@ -59,13 +62,15 @@ nameIsSyn n = do
   case i of
     TyConI d -> return (decIsSyn d)
     ClassI {} -> return Nothing
+    PrimTyConI {} -> return Nothing
+    _ -> fail (packagename ++ ": nameIsSyn: unexpected Info: "++show(n,i))
 
 decIsSyn :: Dec -> Maybe SynInfo
-decIsSyn (ClassD _ _ _ _ _) = Nothing
-decIsSyn (DataD _ _ _ _ _) = Nothing
-decIsSyn (NewtypeD _ _ _ _ _) = Nothing
+decIsSyn (ClassD {}) = Nothing
+decIsSyn (DataD {}) = Nothing
+decIsSyn (NewtypeD {}) = Nothing
 decIsSyn (TySynD _ vars t) = Just (tyVarBndrGetName <$> vars,t)
-decIsSyn x = error ("decIsSyn: unexpected dec: "++show x)
+decIsSyn x = error (packagename ++ ": decIsSyn: unexpected Dec: "++show x)
 
 -- | Expands type synonyms...
 expandSyns :: Type -> Q Type
@@ -88,7 +93,7 @@ expandSyns =
         return ([],ForallT ns cxt' t')
 
       go acc x@(ForallT _ _ _) = 
-          fail ("Unexpected application of the local quantification: "
+          fail (packagename++": Unexpected application of the local quantification: "
                 ++show x
                 ++"\n    (to the arguments "++show acc++")")
                                   
@@ -104,7 +109,7 @@ expandSyns =
               Nothing -> return (acc,x)
               Just (vars,body) ->
                   if length acc < length vars
-                  then fail ("expandSyns: Underapplied type synonym:"++show(n,acc))
+                  then fail (packagename++": expandSyns: Underapplied type synonym:"++show(n,acc))
                   else 
                       let
                           substs = zip vars acc
