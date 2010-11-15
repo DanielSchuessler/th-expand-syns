@@ -58,9 +58,7 @@ nameIsSyn n = do
   i <- reify n
   case i of
     TyConI d -> return (decIsSyn d)
-    ClassI _ -> return Nothing
-    PrimTyConI _ _ _ -> return Nothing
-    _ -> fail ("nameIsSyn: unexpected info: "++show(n,i))
+    ClassI {} -> return Nothing
 
 decIsSyn :: Dec -> Maybe SynInfo
 decIsSyn (ClassD _ _ _ _ _) = Nothing
