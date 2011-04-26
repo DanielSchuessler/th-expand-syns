@@ -35,6 +35,8 @@ class Class1 a where
 
 instance Class1 Int where type AT1 Int = A ()
 
+type Int' = Int
+
 main = do
     putStrLn "Basic test..."
     $(mkTest  [t| forall a. Show a => a -> B []             -> (Int,C []) |] 
@@ -56,3 +58,6 @@ main = do
       in
         mkTest t t)
              
+    putStrLn "Testing that the args of type family applications are handled" 
+    $(mkTest [t| (DF1 Int', TF1 Int', AT1 Int') |]
+             [t| (DF1 Int, TF1 Int, AT1 Int) |])

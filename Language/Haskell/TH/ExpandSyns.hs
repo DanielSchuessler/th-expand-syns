@@ -16,7 +16,7 @@ packagename :: String
 packagename = "th-expand-syns"
     
     
--- Compatibility layer for TH 2.4 vs. 2.3
+-- Compatibility layer for TH >=2.4 vs. 2.3
 tyVarBndrGetName :: TyVarBndr -> Name
 mapPred :: (Type -> Type) -> Pred -> Pred
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
@@ -86,7 +86,7 @@ decIsSyn x = do
     warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
     return Nothing
 
--- | Expands type synonyms...
+-- | Expands all type synonyms in the given type. Type families currently won't be expanded (but will be passed through).
 expandSyns :: Type -> Q Type
 expandSyns = 
     (\t ->
@@ -176,9 +176,10 @@ instance SubstTypeVariable Type where
 --                    (v "x" `AppT` v "y"))
 
                         
-
+#if __GLASGOW_HASKELL__ >= 611
 instance SubstTypeVariable Pred where
     subst s = mapPred (subst s)
+#endif
         
 
 -- | Make a name (based on the first arg) that's distinct from every name in the second arg
