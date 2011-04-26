@@ -4,7 +4,7 @@
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                       expandSyns
                                       -- * Misc utilities
-                                     ,substInType, substInCon
+                                     ,SubstTypeVariable(..)
                                      ,evades,evade) where
     
 import Language.Haskell.TH hiding(cxt)
@@ -45,8 +45,6 @@ tyVarBndrSetName n _ = n
                        
 #endif
 
-substInPred :: (Name, Type) -> Pred -> Pred
-substInPred s = mapPred (substInType s)
 
 
 (<$>) :: (Functor f) => (a -> b) -> f a -> f b
@@ -113,7 +111,7 @@ expandSyns =
                   else 
                       let
                           substs = zip vars acc
-                          expanded = foldr substInType body substs
+                          expanded = foldr subst body substs
                       in
                         go (drop (length vars) acc) expanded
                         
@@ -125,9 +123,14 @@ expandSyns =
             return (acc',SigT t' kind)
 #endif
 
--- | Capture-free substitution
-substInType :: (Name, Type) -> Type -> Type
-substInType (v, t) = go
+class SubstTypeVariable a where
+    -- | Capture-free substitution
+    subst :: (Name, Type) -> a -> a
+
+
+
+instance SubstTypeVariable Type where
+  subst (v, t) = go
     where
       go (AppT x y) = AppT (go x) (go y)
       go s@(ConT _) = s
@@ -136,7 +139,7 @@ substInType (v, t) = go
       go ArrowT = ArrowT
       go ListT = ListT
       go (ForallT vars cxt body) = 
-          commonForallCase (v,t) ForallT substInType (vars,cxt,body)
+          commonForallCase (v,t) (vars,cxt,body)
                         
       go s@(TupleT _) = s
                         
@@ -158,9 +161,22 @@ substInType (v, t) = go
 
                         
 
+instance SubstTypeVariable Pred where
+    subst s = mapPred (subst s)
         
 
 -- | Make a name (based on the first arg) that's distinct from every name in the second arg
+--
+-- Example why this is necessary:
+--
+-- > type E x = forall y. Either x y
+-- >
+-- > ... expandSyns [t| forall y. E y |]
+--
+-- The example as given may actually work correctly without any special capture-avoidance depending
+-- on how GHC handles the @y@s, but in any case, the input type to expandSyns may be an explicit
+-- AST using 'mkName' to ensure a collision.
+--
 evade :: Data d => Name -> d -> Name
 evade n t = 
     let
@@ -186,29 +202,41 @@ evades ns t = foldr c [] ns
 --             in
 --               evade v (AppT (VarT v) (VarT (mkName "fx")))
 
-substInCon :: (Name, Type) -> Con -> Con
-substInCon (v,t) = go
+instance SubstTypeVariable Con where
+  subst (v,t) = go
     where
-      st = substInType (v,t)
+      st = subst (v,t)
 
       go (NormalC n ts) = NormalC n [(x, st y) | (x,y) <- ts]
       go (RecC n ts) = RecC n [(x, y, st z) | (x,y,z) <- ts]
       go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
       go (ForallC vars cxt body) = 
-          commonForallCase (v,t) ForallC substInCon (vars,cxt,body)
+          commonForallCase (v,t) (vars,cxt,body)
 
 
 
+class HasForallConstruct a where
+    mkForall :: [TyVarBndr] -> Cxt -> a -> a
+
+instance HasForallConstruct Type where
+    mkForall = ForallT
+
+instance HasForallConstruct Con where
+    mkForall = ForallC
 
 
 
-commonForallCase :: (Name,Type) 
-                 -> ([TyVarBndr] -> Cxt -> a -> a) 
-                 -> ((Name,Type) -> a -> a)
+commonForallCase :: (SubstTypeVariable a, HasForallConstruct a) => 
+
+                    (Name,Type) 
                  -> ([TyVarBndr],Cxt,a)
                  -> a
-commonForallCase (v,t) forallCon bodySubst (bndrs,cxt,body)
-          | v `elem` (tyVarBndrGetName <$> bndrs) = forallCon bndrs cxt body -- shadowed
+commonForallCase vt@(v,t) (bndrs,cxt,body)
+
+            -- If a variable with the same name as the one to be replaced is bound by the forall, 
+            -- the variable to be replaced is shadowed in the body, so we leave the whole thing alone (no recursion)
+          | v `elem` (tyVarBndrGetName <$> bndrs) = mkForall bndrs cxt body 
+
           | otherwise = 
               let
                   -- prevent capture
@@ -216,10 +244,11 @@ commonForallCase (v,t) forallCon bodySubst (bndrs,cxt,body)
                   freshes = evades vars t
                   freshTyVarBndrs = zipWith tyVarBndrSetName freshes bndrs
                   substs = zip vars (VarT <$> freshes)
-                  doSubsts f x = foldr f x substs
+                  doSubsts :: SubstTypeVariable b => b -> b
+                  doSubsts x = foldr subst x substs
                                
               in
-                forallCon 
+                mkForall 
                   freshTyVarBndrs
-                  (fmap (substInPred (v,t) . doSubsts substInPred) cxt ) 
-                  (     (  bodySubst (v,t) . doSubsts bodySubst  ) body)
+                  (fmap (subst vt . doSubsts) cxt ) 
+                  (     (subst vt . doSubsts) body)
