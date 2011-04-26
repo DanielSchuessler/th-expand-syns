@@ -4,7 +4,8 @@
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                       expandSyns
                                       -- * Misc utilities
-                                     ,SubstTypeVariable(..)
+                                     ,substInType
+                                     ,substInCon
                                      ,evades,evade) where
     
 import Language.Haskell.TH hiding(cxt)
@@ -269,3 +270,13 @@ commonForallCase vt@(v,t) (bndrs,cxt,body)
                   freshTyVarBndrs
                   (fmap (subst vt . doSubsts) cxt ) 
                   (     (subst vt . doSubsts) body)
+
+
+
+-- | Capture-free substitution
+substInType :: (Name,Type) -> Type -> Type
+substInType = subst
+
+-- | Capture-free substitution
+substInCon :: (Name,Type) -> Type -> Type
+substInCon = subst
