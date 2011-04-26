@@ -61,7 +61,6 @@ nameIsSyn n = do
     TyConI d -> decIsSyn d
     ClassI {} -> return Nothing
     PrimTyConI {} -> return Nothing
-    TyVarI {} -> return Nothing
     _ -> do 
             warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++"). I will assume that "++show n++" is not a type synonym.")
             return Nothing
@@ -71,11 +70,18 @@ nameIsSyn n = do
 warn ::  String -> Q ()
 warn msg = report False (packagename ++": "++"WARNING: "++msg)
 
+-- | Handles only declaration constructs that can be returned by 'reify'ing a type name.
 decIsSyn :: Dec -> Q (Maybe SynInfo)
 decIsSyn (ClassD {}) = return Nothing
 decIsSyn (DataD {}) = return Nothing
 decIsSyn (NewtypeD {}) = return Nothing
 decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
+#if __GLASGOW_HASKELL__ >= 611
+decIsSyn (FamilyD _ name _ _) = do
+    warn ("Type families (data families, newtype families, associated types and type synonym families) are currently not supported (they won't be expanded). Name of unsupported family: "++show name) 
+    return Nothing
+    
+#endif
 decIsSyn x = do
     warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
     return Nothing

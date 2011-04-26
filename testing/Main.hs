@@ -50,6 +50,9 @@ main = do
         mkTest  (forallT'' ["y"] (conT' "E" `appT` varT' "y")) 
                 (forallT'' ["y"] expectedExpansion))
 
---     putStrLn "Data family test..."
---     $(mkTest [t| DF1 Int |]
---              [t| DF1 Int |])
+    putStrLn "Testing that it doesn't crash on type families (expanding them is not supported yet)"
+    $(let
+        t = [t| (DF1 Int, TF1 Int, AT1 Int) |]
+      in
+        mkTest t t)
+             
