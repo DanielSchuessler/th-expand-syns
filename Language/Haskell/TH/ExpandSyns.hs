@@ -58,17 +58,27 @@ nameIsSyn :: Name -> Q (Maybe SynInfo)
 nameIsSyn n = do
   i <- reify n
   case i of
-    TyConI d -> return (decIsSyn d)
+    TyConI d -> decIsSyn d
     ClassI {} -> return Nothing
     PrimTyConI {} -> return Nothing
-    _ -> fail (packagename ++ ": nameIsSyn: unexpected Info: "++show(n,i))
+    TyVarI {} -> return Nothing
+    _ -> do 
+            warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++"). I will assume that "++show n++" is not a type synonym.")
+            return Nothing
+        
 
-decIsSyn :: Dec -> Maybe SynInfo
-decIsSyn (ClassD {}) = Nothing
-decIsSyn (DataD {}) = Nothing
-decIsSyn (NewtypeD {}) = Nothing
-decIsSyn (TySynD _ vars t) = Just (tyVarBndrGetName <$> vars,t)
-decIsSyn x = error (packagename ++ ": decIsSyn: unexpected Dec: "++show x)
+
+warn ::  String -> Q ()
+warn msg = report False (packagename ++": "++"WARNING: "++msg)
+
+decIsSyn :: Dec -> Q (Maybe SynInfo)
+decIsSyn (ClassD {}) = return Nothing
+decIsSyn (DataD {}) = return Nothing
+decIsSyn (NewtypeD {}) = return Nothing
+decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
+decIsSyn x = do
+    warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
+    return Nothing
 
 -- | Expands type synonyms...
 expandSyns :: Type -> Q Type

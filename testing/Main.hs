@@ -22,9 +22,18 @@ $(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]
            ])
 
 
-data family D1 a
+data family DF1 a
 
-data instance D1 Int = DInt (A ())
+data instance DF1 Int = DInt (A ())
+
+type family TF1 a
+
+type instance TF1 Int = A ()
+
+class Class1 a where
+    type AT1 a
+
+instance Class1 Int where type AT1 Int = A ()
 
 main = do
     putStrLn "Basic test..."
@@ -41,6 +50,6 @@ main = do
         mkTest  (forallT'' ["y"] (conT' "E" `appT` varT' "y")) 
                 (forallT'' ["y"] expectedExpansion))
 
-    putStrLn "Data family test..."
-    $(mkTest [t| D1 Int |]
-             [t| D1 Int |])
+--     putStrLn "Data family test..."
+--     $(mkTest [t| DF1 Int |]
+--              [t| DF1 Int |])
