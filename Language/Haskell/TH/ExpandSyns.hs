@@ -13,6 +13,11 @@ import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
 
+-- For ghci
+#ifndef MIN_VERSION_template_haskell
+#define MIN_VERSION_template_haskell(X,Y,Z) 1
+#endif
+
 packagename :: String
 packagename = "th-expand-syns"
     
@@ -23,7 +28,7 @@ mapPred :: (Type -> Type) -> Pred -> Pred
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
 tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
                    
-#if __GLASGOW_HASKELL__ >= 611
+#if MIN_VERSION_template_haskell(2,4,0)
 tyVarBndrGetName (PlainTV n) = n
 tyVarBndrGetName (KindedTV n _) = n
                                 
@@ -77,7 +82,7 @@ decIsSyn (ClassD {}) = return Nothing
 decIsSyn (DataD {}) = return Nothing
 decIsSyn (NewtypeD {}) = return Nothing
 decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
-#if __GLASGOW_HASKELL__ >= 611
+#if MIN_VERSION_template_haskell(2,4,0)
 decIsSyn (FamilyD _ name _ _) = do
     warn ("Type families (data families, newtype families, associated types and type synonym families) are currently not supported (they won't be expanded). Name of unsupported family: "++show name) 
     return Nothing
@@ -133,11 +138,15 @@ expandSyns =
                         go (drop (length vars) acc) expanded
                         
 
-#if __GLASGOW_HASKELL__ >= 611
+#if MIN_VERSION_template_haskell(2,4,0)
       go acc (SigT t kind) = 
           do
             (acc',t') <- go acc t
             return (acc',SigT t' kind)
+#endif
+
+#if MIN_VERSION_template_haskell(2,6,0)
+      go acc x@(UnboxedTupleT _) = return (acc, x)
 #endif
 
 class SubstTypeVariable a where
@@ -160,8 +169,12 @@ instance SubstTypeVariable Type where
                         
       go s@(TupleT _) = s
                         
-#if __GLASGOW_HASKELL__ >= 611
+#if MIN_VERSION_template_haskell(2,4,0)
       go (SigT t1 kind) = SigT (go t1) kind
+#endif
+
+#if MIN_VERSION_template_haskell(2,6,0)
+      go s@(UnboxedTupleT _) = s
 #endif
 
 -- testCapture :: Type
@@ -177,7 +190,7 @@ instance SubstTypeVariable Type where
 --                    (v "x" `AppT` v "y"))
 
                         
-#if __GLASGOW_HASKELL__ >= 611
+#if MIN_VERSION_template_haskell(2,4,0)
 instance SubstTypeVariable Pred where
     subst s = mapPred (subst s)
 #endif
