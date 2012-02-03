@@ -1,5 +1,5 @@
 name:                th-expand-syns
-version:             0.3.0.0
+version:             0.3.0.1
 synopsis:            Expands type synonyms in Template Haskell ASTs
 description:         Expands type synonyms in Template Haskell ASTs
 category:            Template Haskell

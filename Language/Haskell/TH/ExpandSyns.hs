@@ -9,7 +9,7 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                      ,evades,evade) where
     
 import Language.Haskell.TH hiding(cxt)
-import Data.Set as Set    
+import qualified Data.Set as Set    
 import Data.Generics
 import Control.Monad
 
@@ -198,10 +198,10 @@ instance SubstTypeVariable Pred where
 evade :: Data d => Name -> d -> Name
 evade n t = 
     let
-        vars :: Set Name
-        vars = everything union (mkQ Set.empty Set.singleton) t
+        vars :: Set.Set Name
+        vars = everything Set.union (mkQ Set.empty Set.singleton) t
 
-        go n1 = if n1 `member` vars
+        go n1 = if n1 `Set.member` vars
                 then go (bump n1)
                 else n1
                      
