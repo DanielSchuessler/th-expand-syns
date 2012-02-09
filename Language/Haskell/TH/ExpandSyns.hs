@@ -291,5 +291,5 @@ substInType :: (Name,Type) -> Type -> Type
 substInType = subst
 
 -- | Capture-free substitution
-substInCon :: (Name,Type) -> Type -> Type
+substInCon :: (Name,Type) -> Con -> Con
 substInCon = subst
