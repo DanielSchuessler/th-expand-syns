@@ -12,8 +12,8 @@ build-type:          Simple
 extra-source-files:  testing/Main.hs
 
 source-repository head
- type: darcs
- location: http://code.haskell.org/~daniels/th-expand-syns
+ type: git
+ location: git://github.com/DanielSchuessler/th-expand-syns.git
 
 Library
     build-depends:       base >= 4 && < 5, template-haskell, syb, containers
