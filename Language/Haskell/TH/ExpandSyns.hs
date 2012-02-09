@@ -202,7 +202,7 @@ instance SubstTypeVariable Pred where
 --
 -- > type E x = forall y. Either x y
 -- >
--- > ... expandSyns [t| forall y. E y |]
+-- > ... expandSyns [t| forall y. y -> E y |]
 --
 -- The example as given may actually work correctly without any special capture-avoidance depending
 -- on how GHC handles the @y@s, but in any case, the input type to expandSyns may be an explicit
