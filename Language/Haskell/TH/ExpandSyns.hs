@@ -67,14 +67,36 @@ nameIsSyn n = do
     TyConI d -> decIsSyn d
     ClassI {} -> return Nothing
     PrimTyConI {} -> return Nothing
+#if MIN_VERSION_template_haskell(2,7,0)
+    FamilyI (FamilyD flavour name _ _) _ -> maybeWarnTypeFamily flavour name >> return Nothing
+#endif
     _ -> do 
-            warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++"). I will assume that "++show n++" is not a type synonym.")
+            warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++").\n"++
+                  "I will assume that "++show n++" is not a type synonym.")
             return Nothing
         
 
 
 warn ::  String -> Q ()
-warn msg = report False (packagename ++": "++"WARNING: "++msg)
+warn msg = 
+#if MIN_VERSION_template_haskell(2,8,0)
+    reportWarning
+#else
+    report False 
+#endif
+      (packagename ++": "++"WARNING: "++msg)
+
+
+#if MIN_VERSION_template_haskell(2,4,0)
+maybeWarnTypeFamily :: FamFlavour -> Name -> Q ()
+maybeWarnTypeFamily flavour name = 
+  case flavour of
+    TypeFam ->
+      warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name) 
+
+    DataFam -> return ()
+      -- Nothing to expand for data families, so no warning
+#endif
 
 -- | Handles only declaration constructs that can be returned by 'reify'ing a type name.
 decIsSyn :: Dec -> Q (Maybe SynInfo)
@@ -83,34 +105,47 @@ decIsSyn (DataD {}) = return Nothing
 decIsSyn (NewtypeD {}) = return Nothing
 decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
 #if MIN_VERSION_template_haskell(2,4,0)
-decIsSyn (FamilyD _ name _ _) = do
-    warn ("Type families (data families, newtype families, associated types and type synonym families) are currently not supported (they won't be expanded). Name of unsupported family: "++show name) 
-    return Nothing
-    
+decIsSyn (FamilyD flavour name _ _) = maybeWarnTypeFamily flavour name >> return Nothing
 #endif
 decIsSyn x = do
     warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
     return Nothing
 
+
+
+
+
 -- | Expands all type synonyms in the given type. Type families currently won't be expanded (but will be passed through).
 expandSyns :: Type -> Q Type
-expandSyns = 
-    (\t ->
+expandSyns = \t ->
          do
            (acc,t') <- go [] t
-           return (foldl AppT t' acc))
+           return (foldl AppT t' acc)
 
 
     where
-      go acc ListT = return (acc,ListT)
-      go acc ArrowT = return (acc,ArrowT)
-      go acc x@(TupleT _) = return (acc, x)
-      go acc x@(VarT _) = return (acc, x)
+      -- Must only be called on an `x' requiring no expansion
+      passThrough acc x = return (acc, x)
+
+      -- If @go args t = (args', t')@,
+      --
+      -- Precondition: 
+      --  All elements of `args' are expanded. 
+      -- Postcondition:
+      --  All elements of `args'' and `t'' are expanded.
+      --  `t' applied to `args' equals `t'' applied to `args'' (up to expansion, of course)
+
+      go :: [Type] -> Type -> Q ([Type], Type)
+
+      go acc x@ListT = passThrough acc x
+      go acc x@ArrowT = passThrough acc x
+      go acc x@(TupleT _) = passThrough acc x
+      go acc x@(VarT _) = passThrough acc x
                           
       go [] (ForallT ns cxt t) = do
         cxt' <- mapM (bindPred expandSyns) cxt
         t' <- expandSyns t
-        return ([],ForallT ns cxt' t')
+        return ([], ForallT ns cxt' t')
 
       go acc x@(ForallT _ _ _) = 
           fail (packagename++": Unexpected application of the local quantification: "
@@ -126,10 +161,10 @@ expandSyns =
           do
             i <- nameIsSyn n
             case i of
-              Nothing -> return (acc,x)
+              Nothing -> return (acc, x)
               Just (vars,body) ->
                   if length acc < length vars
-                  then fail (packagename++": expandSyns: Underapplied type synonym:"++show(n,acc))
+                  then fail (packagename++": expandSyns: Underapplied type synonym: "++show(n,acc))
                   else 
                       let
                           substs = zip vars acc
@@ -142,11 +177,25 @@ expandSyns =
       go acc (SigT t kind) = 
           do
             (acc',t') <- go acc t
-            return (acc',SigT t' kind)
+            return 
+              (acc', 
+                SigT t' kind
+                -- No expansion needed in kinds (todo: is this correct?)
+              )
 #endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
-      go acc x@(UnboxedTupleT _) = return (acc, x)
+      go acc x@(UnboxedTupleT _) = passThrough acc x
+#endif
+
+#if MIN_VERSION_template_haskell(2,8,0)
+      go acc x@(PromotedT _) = passThrough acc x
+      go acc x@(PromotedTupleT _) = passThrough acc x
+      go acc x@PromotedConsT = passThrough acc x
+      go acc x@PromotedNilT = passThrough acc x
+      go acc x@StarT = passThrough acc x
+      go acc x@ConstraintT = passThrough acc x
+      go acc x@(LitT _) = passThrough acc x
 #endif
 
 class SubstTypeVariable a where
@@ -175,6 +224,16 @@ instance SubstTypeVariable Type where
 
 #if MIN_VERSION_template_haskell(2,6,0)
       go s@(UnboxedTupleT _) = s
+#endif
+
+#if MIN_VERSION_template_haskell(2,8,0)
+      go s@(PromotedT _) = s
+      go s@(PromotedTupleT _) = s
+      go s@PromotedConsT = s
+      go s@PromotedNilT = s
+      go s@StarT = s
+      go s@ConstraintT = s
+      go s@(LitT _) = s
 #endif
 
 -- testCapture :: Type

@@ -12,10 +12,12 @@ import Util
     
 -- type A = forall a. B a; type B a = Maybe a; expand [t|B A|]
 
-type A x = [x] 
-type B f = forall x. f x 
-type C f = f Integer
-
+type ListOf x = [x] 
+type ForAll f = forall x. f x 
+type ApplyToInteger f = f Integer
+type Int' = Int
+type Either' = Either
+type Int'' = Int
 
 $(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]  
                 (forallT'' ["y"] (conT ''Either `appT` varT' "x" `appT` varT' "y" --> conT ''Int))
@@ -24,22 +26,21 @@ $(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]
 
 data family DF1 a
 
-data instance DF1 Int = DInt (A ())
+data instance DF1 Int = DInt (ListOf ())
 
 type family TF1 a
 
-type instance TF1 Int = A ()
+type instance TF1 Int = ListOf ()
 
 class Class1 a where
     type AT1 a
 
-instance Class1 Int where type AT1 Int = A ()
+instance Class1 Int where type AT1 Int = ListOf ()
 
-type Int' = Int
 
 main = do
     putStrLn "Basic test..."
-    $(mkTest  [t| forall a. Show a => a -> B []             -> (Int,C []) |] 
+    $(mkTest  [t| forall a. Show a => a -> ForAll [] -> (Int,ApplyToInteger []) |] 
               [t| forall a. Show a => a -> (forall x. [] x) -> (Int,[] Integer) |])
 
     putStrLn "Variable capture avoidance test..."
@@ -61,3 +62,13 @@ main = do
     putStrLn "Testing that the args of type family applications are handled" 
     $(mkTest [t| (DF1 Int', TF1 Int', AT1 Int') |]
              [t| (DF1 Int, TF1 Int, AT1 Int) |])
+
+    putStrLn "Higher-kinded synonym"
+    $(mkTest 
+        [t| Either' (ListOf Int') (ListOf Char) |]
+        [t| Either [Int] [Char] |])
+
+    putStrLn "Nested"
+    $(mkTest 
+        [t| Int'' |]
+        [t| Int |])
