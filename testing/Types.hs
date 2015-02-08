@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE KindSignatures #-}
 module Types where
 
 import Language.Haskell.TH
@@ -16,6 +17,7 @@ type Int' = Int
 type Either' = Either
 type Int'' = Int
 
+-- type E x = forall y. Either x y -> Int
 $(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]
                 (forallT'' ["y"] (conT ''Either `appT` varT' "x" `appT` varT' "y" --> conT ''Int))
            ])

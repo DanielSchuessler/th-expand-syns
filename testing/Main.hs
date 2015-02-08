@@ -2,6 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
 -- {-# OPTIONS -ddump-splices #-}
 
 import Language.Haskell.TH.ExpandSyns
@@ -12,14 +13,41 @@ import Types
 
 
 main = do
+    $(do
+        i <- reify ''ForAll
+        runIO . putStrLn . show $ i
+        [| return () |])
+
     putStrLn "Basic test..."
     $(mkTest  [t| forall a. Show a => a -> ForAll [] -> (Int,ApplyToInteger []) |] 
-              [t| forall a. Show a => a -> (forall x. [] x) -> (Int,[] Integer) |])
+
+-- GHC 7.8 always seems to consider the body of 'ForallT' to have a 'PlainTV', 
+-- whereas it always has a 'KindedTV' with GHC 7.10 (in both cases, it doesn't appear 
+-- to matter whether the definition of 'ForAll' is actually written with a kind signature).
+#if MIN_VERSION_template_haskell(2,10,0)
+              [t| forall a. Show a => a -> (forall (x :: *). [] x) -> (Int,[] Integer) |]
+#else
+              [t| forall a. Show a => a -> (forall x. [] x) -> (Int,[] Integer) |]
+#endif
+              
+              )
 
     putStrLn "Variable capture avoidance test..."
     $(let
+
+-- See comment about 'PlainTV'/'KindedTV' above
+#if MIN_VERSION_template_haskell(2,10,0)
+        y_0 = KindedTV (mkName "y_0") StarT
+#else
+        y_0 = PlainTV (mkName "y_0")
+#endif
+
         expectedExpansion =
-         forallT'' ["y_0"] (conT ''Either `appT` varT' "y" `appT` varT' "y_0" --> conT ''Int)
+         forallT 
+            [y_0] 
+            (cxt [])
+            (conT ''Either `appT` varT' "y" `appT` varT' "y_0" --> conT ''Int)
+
          -- the naive (and wrong) result would be:
          --   forall y. (forall y. Either y y -> Int)
       in
