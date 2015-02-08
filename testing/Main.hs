@@ -13,11 +13,6 @@ import Types
 
 
 main = do
-    $(do
-        i <- reify ''ForAll
-        runIO . putStrLn . show $ i
-        [| return () |])
-
     putStrLn "Basic test..."
     $(mkTest  [t| forall a. Show a => a -> ForAll [] -> (Int,ApplyToInteger []) |] 
 
