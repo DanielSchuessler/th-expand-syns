@@ -3,7 +3,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 -- {-# OPTIONS -ddump-splices #-}
-module Main where
 
 import Language.Haskell.TH.ExpandSyns
 import Language.Haskell.TH
