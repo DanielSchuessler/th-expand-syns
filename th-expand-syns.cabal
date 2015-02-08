@@ -6,7 +6,7 @@ category:            Template Haskell
 license:             BSD3
 license-file:        LICENSE
 author:              Daniel Schüssler
-maintainer:          daniels@community.haskell.org
+maintainer:          haskell.5wlh@gishpuppy.com
 cabal-version:       >= 1.6
 build-type:          Simple
 extra-source-files:  testing/Main.hs
