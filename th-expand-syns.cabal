@@ -9,7 +9,7 @@ author:              Daniel Schüssler
 maintainer:          haskell.5wlh@gishpuppy.com
 cabal-version:       >= 1.8
 build-type:          Simple
-extra-source-files:  testing/Main.hs
+extra-source-files:  changelog.markdown
 
 source-repository head
  type: git
