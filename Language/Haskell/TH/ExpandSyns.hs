@@ -12,6 +12,9 @@ import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
+#if __GLASGOW_HASKELL__ >= 709
+import Data.Functor ((<$>))
+#endif
 
 -- For ghci
 #ifndef MIN_VERSION_template_haskell
@@ -58,9 +61,10 @@ tyVarBndrSetName n _ = n
 #endif
 
 
-
+#if __GLASGOW_HASKELL__ < 709
 (<$>) :: (Functor f) => (a -> b) -> f a -> f b
 (<$>) = fmap
+#endif
 (<*>) :: (Monad m) => m (a -> b) -> m a -> m b
 (<*>) = ap
 
