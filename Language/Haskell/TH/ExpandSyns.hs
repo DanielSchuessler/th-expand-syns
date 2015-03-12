@@ -12,9 +12,6 @@ import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
-#if __GLASGOW_HASKELL__ >= 709
-import Data.Functor ((<$>))
-#endif
 
 -- For ghci
 #ifndef MIN_VERSION_template_haskell
