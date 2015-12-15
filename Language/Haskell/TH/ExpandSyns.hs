@@ -74,7 +74,11 @@ nameIsSyn n = do
     TyConI d -> decIsSyn d
     ClassI {} -> return Nothing
     PrimTyConI {} -> return Nothing
-#if MIN_VERSION_template_haskell(2,7,0)
+#if MIN_VERSION_template_haskell(2,11,0)
+    FamilyI (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) _ -> maybeWarnTypeFamily TypeFam name >> return Nothing
+    FamilyI (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) _ -> maybeWarnTypeFamily TypeFam name >> return Nothing
+    FamilyI (DataFamilyD _ _ _) _ -> return Nothing
+#elif MIN_VERSION_template_haskell(2,7,0)
     FamilyI (FamilyD flavour name _ _) _ -> maybeWarnTypeFamily flavour name >> return Nothing
 #endif
     _ -> do
@@ -111,7 +115,11 @@ decIsSyn (ClassD {}) = return Nothing
 decIsSyn (DataD {}) = return Nothing
 decIsSyn (NewtypeD {}) = return Nothing
 decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
-#if MIN_VERSION_template_haskell(2,4,0)
+#if MIN_VERSION_template_haskell(2,11,0)
+decIsSyn (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily TypeFam name >> return Nothing
+decIsSyn (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily TypeFam name >> return Nothing
+decIsSyn (DataFamilyD _ _ _) = return Nothing
+#elif MIN_VERSION_template_haskell(2,4,0)
 decIsSyn (FamilyD flavour name _ _) = maybeWarnTypeFamily flavour name >> return Nothing
 #endif
 decIsSyn x = do
@@ -209,6 +217,24 @@ expandSyns = \t ->
       go acc x@EqualityT = passThrough acc x
 #endif
 
+#if MIN_VERSION_template_haskell(2,11,0)
+      go acc (InfixT t1 nm t2) =
+          do
+            t1' <- expandSyns t1
+            t2' <- expandSyns t2
+            return (acc,InfixT t1' nm t2')
+      go acc (UInfixT t1 nm t2) =
+          do
+            t1' <- expandSyns t1
+            t2' <- expandSyns t2
+            return (acc,UInfixT t1' nm t2')
+      go acc (ParensT t) =
+          do
+            (acc',t') <- go acc t
+            return (acc',ParensT t')
+      go acc x@(WildCardT _) = passThrough acc x
+#endif
+
 class SubstTypeVariable a where
     -- | Capture-free substitution
     subst :: (Name, Type) -> a -> a
@@ -249,6 +275,13 @@ instance SubstTypeVariable Type where
 
 #if MIN_VERSION_template_haskell(2,10,0)
       go s@EqualityT = s
+#endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+      go (InfixT t1 nm t2) = InfixT (go t1) nm (go t2)
+      go (UInfixT t1 nm t2) = UInfixT (go t1) nm (go t2)
+      go (ParensT t1) = ParensT (go t1)
+      go s@(WildCardT _) = s
 #endif
 
 -- testCapture :: Type
