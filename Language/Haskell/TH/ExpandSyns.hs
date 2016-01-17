@@ -232,7 +232,7 @@ expandSyns = \t ->
           do
             (acc',t') <- go acc t
             return (acc',ParensT t')
-      go acc x@(WildCardT _) = passThrough acc x
+      go acc x@WildCardT = passThrough acc x
 #endif
 
 class SubstTypeVariable a where
@@ -281,7 +281,7 @@ instance SubstTypeVariable Type where
       go (InfixT t1 nm t2) = InfixT (go t1) nm (go t2)
       go (UInfixT t1 nm t2) = UInfixT (go t1) nm (go t2)
       go (ParensT t1) = ParensT (go t1)
-      go s@(WildCardT _) = s
+      go s@WildCardT = s
 #endif
 
 -- testCapture :: Type
