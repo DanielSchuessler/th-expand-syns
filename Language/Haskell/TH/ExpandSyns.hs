@@ -350,7 +350,10 @@ instance SubstTypeVariable Con where
       go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
       go (ForallC vars cxt body) =
           commonForallCase (v,t) (vars,cxt,body)
-
+#if MIN_VERSION_template_haskell(2,11,0)
+      go (GadtC nms ts ty) = GadtC nms [(x,st y) | (x,y) <- ts] (st ty)
+      go (RecGadtC nms ts ty) = RecGadtC nms [(x, y, st z) | (x,y,z) <- ts] (st ty)
+#endif
 
 
 class HasForallConstruct a where
