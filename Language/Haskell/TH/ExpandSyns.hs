@@ -350,7 +350,12 @@ instance SubstTypeVariable Con where
       go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
       go (ForallC vars cxt body) =
           commonForallCase (v,t) (vars,cxt,body)
+#if MIN_VERSION_template_haskell(2,11,0)
+      go c@GadtC{} = errGadt c
+      go c@RecGadtC{} = errGadt c
 
+      errGadt c = error (packagename++": substInCon currently doesn't support GADT constructors with GHC >= 8 ("++pprint c++")")
+#endif
 
 
 class HasForallConstruct a where
