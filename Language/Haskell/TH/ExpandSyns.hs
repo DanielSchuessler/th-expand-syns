@@ -3,6 +3,10 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                       expandSyns
+                                     ,expandSynsWith
+                                     ,SynonymExpansionSettings
+                                     ,noWarnTypeFamilies
+
                                       -- * Misc utilities
                                      ,substInType
                                      ,substInCon
@@ -12,6 +16,8 @@ import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
+import Data.Monoid
+import Prelude
 
 -- For ghci
 #ifndef MIN_VERSION_template_haskell
@@ -65,21 +71,49 @@ tyVarBndrSetName n _ = n
 (<*>) :: (Monad m) => m (a -> b) -> m a -> m b
 (<*>) = ap
 
+
+
+data SynonymExpansionSettings =
+  SynonymExpansionSettings {
+    sesWarnTypeFamilies :: Bool
+  }
+
+
+
+-- | Default settings ('mempty'):
+--
+-- * Warn if type families are encountered.
+--
+-- (The 'mappend' is currently rather useless; the monoid instance is intended for additional settings in the future).
+instance Monoid SynonymExpansionSettings where
+  mempty =
+    SynonymExpansionSettings {
+      sesWarnTypeFamilies = True
+    }
+
+  mappend (SynonymExpansionSettings w1) (SynonymExpansionSettings w2) =
+    SynonymExpansionSettings (w1 && w2)
+
+-- | Suppresses the warning that type families are unsupported.
+noWarnTypeFamilies :: SynonymExpansionSettings
+noWarnTypeFamilies = mempty { sesWarnTypeFamilies = False }
+
+
 type SynInfo = ([Name],Type)
 
-nameIsSyn :: Name -> Q (Maybe SynInfo)
-nameIsSyn n = do
+nameIsSyn :: SynonymExpansionSettings -> Name -> Q (Maybe SynInfo)
+nameIsSyn settings n = do
   i <- reify n
   case i of
-    TyConI d -> decIsSyn d
+    TyConI d -> decIsSyn settings d
     ClassI {} -> return Nothing
     PrimTyConI {} -> return Nothing
 #if MIN_VERSION_template_haskell(2,11,0)
-    FamilyI (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) _ -> maybeWarnTypeFamily TypeFam name >> return Nothing
-    FamilyI (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) _ -> maybeWarnTypeFamily TypeFam name >> return Nothing
+    FamilyI (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) _ -> maybeWarnTypeFamily settings TypeFam name >> return Nothing
+    FamilyI (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) _ -> maybeWarnTypeFamily settings TypeFam name >> return Nothing
     FamilyI (DataFamilyD _ _ _) _ -> return Nothing
 #elif MIN_VERSION_template_haskell(2,7,0)
-    FamilyI (FamilyD flavour name _ _) _ -> maybeWarnTypeFamily flavour name >> return Nothing
+    FamilyI (FamilyD flavour name _ _) _ -> maybeWarnTypeFamily settings flavour name >> return Nothing
 #endif
     _ -> do
             warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++").\n"++
@@ -99,8 +133,10 @@ warn msg =
 
 
 #if MIN_VERSION_template_haskell(2,4,0)
-maybeWarnTypeFamily :: FamFlavour -> Name -> Q ()
-maybeWarnTypeFamily flavour name =
+maybeWarnTypeFamily :: SynonymExpansionSettings -> FamFlavour -> Name -> Q ()
+maybeWarnTypeFamily settings flavour name =
+  when (sesWarnTypeFamilies settings) $
+
   case flavour of
     TypeFam ->
       warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
@@ -110,35 +146,40 @@ maybeWarnTypeFamily flavour name =
 #endif
 
 -- | Handles only declaration constructs that can be returned by 'reify'ing a type name.
-decIsSyn :: Dec -> Q (Maybe SynInfo)
-decIsSyn (ClassD {}) = return Nothing
-decIsSyn (DataD {}) = return Nothing
-decIsSyn (NewtypeD {}) = return Nothing
-decIsSyn (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
+decIsSyn :: SynonymExpansionSettings -> Dec -> Q (Maybe SynInfo)
+decIsSyn settings = go
+  where
+    go (ClassD {}) = return Nothing
+    go (DataD {}) = return Nothing
+    go (NewtypeD {}) = return Nothing
+    go (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
 #if MIN_VERSION_template_haskell(2,11,0)
-decIsSyn (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily TypeFam name >> return Nothing
-decIsSyn (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily TypeFam name >> return Nothing
-decIsSyn (DataFamilyD _ _ _) = return Nothing
+    go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily settings TypeFam name >> return Nothing
+    go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily settings TypeFam name >> return Nothing
+    go (DataFamilyD _ _ _) = return Nothing
 #elif MIN_VERSION_template_haskell(2,4,0)
-decIsSyn (FamilyD flavour name _ _) = maybeWarnTypeFamily flavour name >> return Nothing
+    go (FamilyD flavour name _ _) = maybeWarnTypeFamily settings flavour name >> return Nothing
 #endif
-decIsSyn x = do
-    warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
-    return Nothing
+    go x = do
+        warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
+        return Nothing
 
 
-
+-- | Calls 'expandSynsWith' with the default settings.
+expandSyns :: Type -> Q Type
+expandSyns = expandSynsWith mempty
 
 
 -- | Expands all type synonyms in the given type. Type families currently won't be expanded (but will be passed through).
-expandSyns :: Type -> Q Type
-expandSyns = \t ->
+expandSynsWith :: SynonymExpansionSettings -> Type -> Q Type
+expandSynsWith settings = expandSyns'
+
+    where
+      expandSyns' t =
          do
            (acc,t') <- go [] t
            return (foldl AppT t' acc)
 
-
-    where
       -- Must only be called on an `x' requiring no expansion
       passThrough acc x = return (acc, x)
 
@@ -158,8 +199,8 @@ expandSyns = \t ->
       go acc x@(VarT _) = passThrough acc x
 
       go [] (ForallT ns cxt t) = do
-        cxt' <- mapM (bindPred expandSyns) cxt
-        t' <- expandSyns t
+        cxt' <- mapM (bindPred expandSyns') cxt
+        t' <- expandSyns' t
         return ([], ForallT ns cxt' t')
 
       go acc x@(ForallT _ _ _) =
@@ -169,17 +210,17 @@ expandSyns = \t ->
 
       go acc (AppT t1 t2) =
           do
-            r <- expandSyns t2
+            r <- expandSyns' t2
             go (r:acc) t1
 
       go acc x@(ConT n) =
           do
-            i <- nameIsSyn n
+            i <- nameIsSyn settings n
             case i of
               Nothing -> return (acc, x)
               Just (vars,body) ->
                   if length acc < length vars
-                  then fail (packagename++": expandSyns: Underapplied type synonym: "++show(n,acc))
+                  then fail (packagename++": expandSynsWith: Underapplied type synonym: "++show(n,acc))
                   else
                       let
                           substs = zip vars acc
@@ -220,13 +261,13 @@ expandSyns = \t ->
 #if MIN_VERSION_template_haskell(2,11,0)
       go acc (InfixT t1 nm t2) =
           do
-            t1' <- expandSyns t1
-            t2' <- expandSyns t2
+            t1' <- expandSyns' t1
+            t2' <- expandSyns' t2
             return (acc,InfixT t1' nm t2')
       go acc (UInfixT t1 nm t2) =
           do
-            t1' <- expandSyns t1
-            t2' <- expandSyns t2
+            t1' <- expandSyns' t1
+            t2' <- expandSyns' t2
             return (acc,UInfixT t1' nm t2')
       go acc (ParensT t) =
           do

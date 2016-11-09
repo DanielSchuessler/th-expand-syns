@@ -68,3 +68,11 @@ main = do
     $(mkTest 
         [t| Int'' |]
         [t| Int |])
+
+    $(do
+        reportWarning "No warning about type families should appear after this line." -- TODO: Automate this test with a custom Quasi instance?
+        _ <- expandSynsWith noWarnTypeFamilies =<< [t| (DF1 Int', TF1 Int', AT1 Int') |]
+        [| return () |])
+
+
+

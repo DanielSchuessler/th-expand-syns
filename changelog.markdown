@@ -1,3 +1,7 @@
+## 0.4.1.0
+
+*   Added a setting for suppressing warnings about type families.
+
 ## 0.4.0.0
 
 *   Fixed build with GHC 8 / template-haskell-2.11 (Thanks to Christiaan Baaij)
