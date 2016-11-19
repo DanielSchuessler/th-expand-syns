@@ -6,7 +6,7 @@
 
 *   Fixed build with GHC 8 / template-haskell-2.11 (Thanks to Christiaan Baaij)
 
-    Note: `substInCon` doesn't support GADT constructor with GHC 8 in this version
+    Note: `substInCon` doesn't support GADT constructors with GHC 8 in this version
 
 ## 0.3.0.6
 

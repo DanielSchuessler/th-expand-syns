@@ -10,6 +10,7 @@ maintainer:          haskell.5wlh@gishpuppy.com
 cabal-version:       >= 1.8
 build-type:          Simple
 extra-source-files:  changelog.markdown
+homepage:            https://github.com/DanielSchuessler/th-expand-syns
 
 source-repository head
  type: git
