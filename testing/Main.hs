@@ -11,10 +11,6 @@ import Language.Haskell.TH.Syntax
 import Util
 import Types
 
-#if !MIN_VERSION_template_haskell(2,8,0)
-reportWarning = report False
-#endif
-
 main = do
     putStrLn "Basic test..."
     $(mkTest  [t| forall a. Show a => a -> ForAll [] -> (Int,ApplyToInteger []) |]
