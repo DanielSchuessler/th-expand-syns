@@ -98,6 +98,17 @@ instance Monoid SynonymExpansionSettings where
 noWarnTypeFamilies :: SynonymExpansionSettings
 noWarnTypeFamilies = mempty { sesWarnTypeFamilies = False }
 
+warn ::  String -> Q ()
+warn msg =
+#if MIN_VERSION_template_haskell(2,8,0)
+    reportWarning
+#else
+    report False
+#endif
+      (packagename ++": "++"WARNING: "++msg)
+
+
+
 
 type SynInfo = ([Name],Type)
 
@@ -119,26 +130,6 @@ nameIsSyn settings n = do
   where
     no = return Nothing
 
-
-
-warn ::  String -> Q ()
-warn msg =
-#if MIN_VERSION_template_haskell(2,8,0)
-    reportWarning
-#else
-    report False
-#endif
-      (packagename ++": "++"WARNING: "++msg)
-
-
-#if MIN_VERSION_template_haskell(2,4,0)
-maybeWarnTypeFamily :: SynonymExpansionSettings -> Name -> Q ()
-maybeWarnTypeFamily settings name =
-  when (sesWarnTypeFamilies settings) $
-      warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
-#endif
-
--- | Handles only declaration constructs that can be returned by 'reify'ing a type name.
 decIsSyn :: SynonymExpansionSettings -> Dec -> Q (Maybe SynInfo)
 decIsSyn settings = go
   where
@@ -196,6 +187,17 @@ decIsSyn settings = go
 #endif
 
     no = return Nothing
+
+#if MIN_VERSION_template_haskell(2,4,0)
+maybeWarnTypeFamily :: SynonymExpansionSettings -> Name -> Q ()
+maybeWarnTypeFamily settings name =
+  when (sesWarnTypeFamilies settings) $
+      warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
+#endif
+
+
+
+
 
 
 
