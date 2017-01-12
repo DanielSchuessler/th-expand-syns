@@ -105,20 +105,19 @@ nameIsSyn :: SynonymExpansionSettings -> Name -> Q (Maybe SynInfo)
 nameIsSyn settings n = do
   i <- reify n
   case i of
+    ClassI {} -> no
+    ClassOpI {} -> no
     TyConI d -> decIsSyn settings d
-    ClassI {} -> return Nothing
-    PrimTyConI {} -> return Nothing
-#if MIN_VERSION_template_haskell(2,11,0)
-    FamilyI (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) _ -> maybeWarnTypeFamily settings TypeFam name >> return Nothing
-    FamilyI (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) _ -> maybeWarnTypeFamily settings TypeFam name >> return Nothing
-    FamilyI (DataFamilyD _ _ _) _ -> return Nothing
-#elif MIN_VERSION_template_haskell(2,7,0)
-    FamilyI (FamilyD flavour name _ _) _ -> maybeWarnTypeFamily settings flavour name >> return Nothing
+#if MIN_VERSION_template_haskell(2,7,0)
+    FamilyI d _ -> decIsSyn settings d -- Called for warnings
 #endif
-    _ -> do
-            warn ("Don't know how to interpret the result of reify "++show n++" (= "++show i++").\n"++
-                  "I will assume that "++show n++" is not a type synonym.")
-            return Nothing
+    PrimTyConI {} -> no
+    DataConI {} -> no
+    VarI {} -> no
+    TyVarI {} -> no
+
+  where
+    no = return Nothing
 
 
 
@@ -133,36 +132,71 @@ warn msg =
 
 
 #if MIN_VERSION_template_haskell(2,4,0)
-maybeWarnTypeFamily :: SynonymExpansionSettings -> FamFlavour -> Name -> Q ()
-maybeWarnTypeFamily settings flavour name =
+maybeWarnTypeFamily :: SynonymExpansionSettings -> Name -> Q ()
+maybeWarnTypeFamily settings name =
   when (sesWarnTypeFamilies settings) $
-
-  case flavour of
-    TypeFam ->
       warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
-
-    DataFam -> return ()
-      -- Nothing to expand for data families, so no warning
 #endif
 
 -- | Handles only declaration constructs that can be returned by 'reify'ing a type name.
 decIsSyn :: SynonymExpansionSettings -> Dec -> Q (Maybe SynInfo)
 decIsSyn settings = go
   where
-    go (ClassD {}) = return Nothing
-    go (DataD {}) = return Nothing
-    go (NewtypeD {}) = return Nothing
     go (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
+
 #if MIN_VERSION_template_haskell(2,11,0)
-    go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily settings TypeFam name >> return Nothing
-    go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily settings TypeFam name >> return Nothing
-    go (DataFamilyD _ _ _) = return Nothing
-#elif MIN_VERSION_template_haskell(2,4,0)
-    go (FamilyD flavour name _ _) = maybeWarnTypeFamily settings flavour name >> return Nothing
+    go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily settings name >> no
+    go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily settings name >> no
+#else
+
+#if MIN_VERSION_template_haskell(2,9,0)
+    go (ClosedTypeFamilyD name _ _ _) = maybeWarnTypeFamily settings name >> no
 #endif
-    go x = do
-        warn ("Unrecognized declaration construct: "++ show x++". I will assume that it's not a type synonym declaration.")
-        return Nothing
+
+    go (FamilyD TypeFam name _ _) = maybeWarnTypeFamily settings name >> no
+#endif
+
+    go (FunD {}) = no
+    go (ValD {}) = no
+    go (DataD {}) = no
+    go (NewtypeD {}) = no
+    go (ClassD {}) = no
+    go (InstanceD {}) = no
+    go (SigD {}) = no
+    go (ForeignD {}) = no
+
+#if MIN_VERSION_template_haskell(2,8,0)
+    go (InfixD {}) = no
+#endif
+
+#if MIN_VERSION_template_haskell(2,4,0)
+    go (PragmaD {}) = no
+#endif
+
+    -- Nothing to expand for data families, so no warning
+#if MIN_VERSION_template_haskell(2,11,0)
+    go (DataFamilyD {}) = no
+#elif MIN_VERSION_template_haskell(2,4,0)
+    go (FamilyD DataFam _ _ _) = no
+#endif
+
+#if MIN_VERSION_template_haskell(2,4,0)
+    go (DataInstD {}) = no
+    go (NewtypeInstD {}) = no
+    go (TySynInstD {}) = no
+#endif
+
+#if MIN_VERSION_template_haskell(2,9,0)
+    go (RoleAnnotD {}) = no
+#endif
+
+#if MIN_VERSION_template_haskell(2,10,0)
+    go (StandaloneDerivD {}) = no
+    go (DefaultSigD {}) = no
+#endif
+
+    no = return Nothing
+
 
 
 -- | Calls 'expandSynsWith' with the default settings.
