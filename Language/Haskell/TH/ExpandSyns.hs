@@ -126,6 +126,9 @@ nameIsSyn settings n = do
     DataConI {} -> no
     VarI {} -> no
     TyVarI {} -> no
+#if MIN_VERSION_template_haskell(2,12,0)
+    PatSynI {} -> no
+#endif
 
   where
     no = return Nothing
@@ -184,6 +187,11 @@ decIsSyn settings = go
 #if MIN_VERSION_template_haskell(2,10,0)
     go (StandaloneDerivD {}) = no
     go (DefaultSigD {}) = no
+#endif
+
+#if MIN_VERSION_template_haskell(2,12,0)
+    go (PatSynD {}) = no
+    go (PatSynSigD {}) = no
 #endif
 
     no = return Nothing
@@ -312,6 +320,10 @@ expandSynsWith settings = expandSyns'
       go acc x@WildCardT = passThrough acc x
 #endif
 
+#if MIN_VERSION_template_haskell(2,12,0)
+      go acc x@(UnboxedSumT _) = passThrough acc x
+#endif
+
 class SubstTypeVariable a where
     -- | Capture-free substitution
     subst :: (Name, Type) -> a -> a
@@ -359,6 +371,10 @@ instance SubstTypeVariable Type where
       go (UInfixT t1 nm t2) = UInfixT (go t1) nm (go t2)
       go (ParensT t1) = ParensT (go t1)
       go s@WildCardT = s
+#endif
+
+#if MIN_VERSION_template_haskell(2,12,0)
+      go s@(UnboxedSumT _) = s
 #endif
 
 -- testCapture :: Type
