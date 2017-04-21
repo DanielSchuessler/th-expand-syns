@@ -105,7 +105,7 @@ warn msg =
 #else
     report False
 #endif
-      (packagename ++": "++"WARNING: "++msg)
+      (packagename ++": WARNING: "++msg)
 
 
 

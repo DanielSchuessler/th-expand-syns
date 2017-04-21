@@ -1,3 +1,7 @@
+## 0.4.3.0
+
+*   Added support for GHC 8.2.1 / template-haskell-2.12 (Thanks to Ryan Scott)
+
 ## 0.4.2.0
 
 *   Eliminated warnings about unrecognized results of 'reify'.
