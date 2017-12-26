@@ -7,7 +7,7 @@ import Data.Semigroup
 
 #else
 
-import Data.Monoid
+import Data.Monoid(Monoid(..))
 import Prelude
 
 infixr 6 <>
