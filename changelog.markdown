@@ -1,3 +1,7 @@
+## 0.4.4.0
+
+*   Made `SynonymExpansionSettings` an instance of `Semigroup` (fixes build with GHC 8.4.1 alpha).
+
 ## 0.4.3.0
 
 *   Added support for GHC 8.2.1 / template-haskell-2.12 (Thanks to Ryan Scott)
