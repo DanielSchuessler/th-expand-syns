@@ -12,11 +12,11 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                      ,substInCon
                                      ,evades,evade) where
 
+import Language.Haskell.TH.ExpandSyns.SemigroupCompat as Sem
 import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
-import Data.Monoid
 import Prelude
 
 -- For ghci
@@ -79,6 +79,9 @@ data SynonymExpansionSettings =
   }
 
 
+instance Semigroup SynonymExpansionSettings where
+  SynonymExpansionSettings w1 <> SynonymExpansionSettings w2 =
+    SynonymExpansionSettings (w1 && w2)
 
 -- | Default settings ('mempty'):
 --
@@ -91,8 +94,12 @@ instance Monoid SynonymExpansionSettings where
       sesWarnTypeFamilies = True
     }
 
-  mappend (SynonymExpansionSettings w1) (SynonymExpansionSettings w2) =
-    SynonymExpansionSettings (w1 && w2)
+#if !MIN_VERSION_base(4,11,0)
+-- starting with base-4.11, mappend definitions are redundant;
+-- at some point `mappend` will be removed from `Monoid`
+  mappend = (Sem.<>)
+#endif
+
 
 -- | Suppresses the warning that type families are unsupported.
 noWarnTypeFamilies :: SynonymExpansionSettings
