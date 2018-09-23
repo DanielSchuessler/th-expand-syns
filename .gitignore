@@ -1,2 +1,5 @@
 .stack-work/
 codex.tags
+dist/
+dist-newstyle/
+.ghc.environment.*
