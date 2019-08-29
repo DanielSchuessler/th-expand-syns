@@ -16,6 +16,7 @@ type ApplyToInteger f = f Integer
 type Int' = Int
 type Either' = Either
 type Int'' = Int
+type Id a = a
 
 -- type E x = forall y. Either x y -> Int
 $(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]
