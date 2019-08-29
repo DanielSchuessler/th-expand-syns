@@ -16,6 +16,7 @@ import Language.Haskell.TH.ExpandSyns.SemigroupCompat as Sem
 import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
 import Data.Generics
+import Data.Maybe
 import Control.Monad
 import Prelude
 
@@ -201,6 +202,10 @@ decIsSyn settings = go
     go (PatSynSigD {}) = no
 #endif
 
+#if MIN_VERSION_template_haskell(2,15,0)
+    go (ImplicitParamBindD {}) = no
+#endif
+
     no = return Nothing
 
 #if MIN_VERSION_template_haskell(2,4,0)
@@ -229,7 +234,38 @@ expandSynsWith settings = expandSyns'
       expandSyns' t =
          do
            (acc,t') <- go [] t
-           return (foldl AppT t' acc)
+           return (foldl applyTypeArg t' acc)
+
+#if MIN_VERSION_template_haskell(2,4,0)
+      expandKindSyns' k =
+# if MIN_VERSION_template_haskell(2,8,0)
+         do
+           (acc,k') <- go [] k
+           return (foldl applyTypeArg k' acc)
+# else
+         return k -- No kind variables on old versions of GHC
+# endif
+#endif
+
+      applyTypeArg :: Type -> TypeArg -> Type
+      applyTypeArg f (TANormal x) = f `AppT` x
+      applyTypeArg f (TyArg _x)   =
+#if __GLASGOW_HASKELL__ >= 807
+                                    f `AppKindT` _x
+#else
+                                    -- VKA isn't supported, so
+                                    -- conservatively drop the argument
+                                    f
+#endif
+
+
+      -- Filter the normal type arguments from a list of TypeArgs.
+      filterTANormals :: [TypeArg] -> [Type]
+      filterTANormals = mapMaybe getTANormal
+        where
+          getTANormal :: TypeArg -> Maybe Type
+          getTANormal (TANormal t) = Just t
+          getTANormal (TyArg {})   = Nothing
 
       -- Must only be called on an `x' requiring no expansion
       passThrough acc x = return (acc, x)
@@ -242,7 +278,7 @@ expandSynsWith settings = expandSyns'
       --  All elements of `args'' and `t'' are expanded.
       --  `t' applied to `args' equals `t'' applied to `args'' (up to expansion, of course)
 
-      go :: [Type] -> Type -> Q ([Type], Type)
+      go :: [TypeArg] -> Type -> Q ([TypeArg], Type)
 
       go acc x@ListT = passThrough acc x
       go acc x@ArrowT = passThrough acc x
@@ -262,7 +298,7 @@ expandSynsWith settings = expandSyns'
       go acc (AppT t1 t2) =
           do
             r <- expandSyns' t2
-            go (r:acc) t1
+            go (TANormal r:acc) t1
 
       go acc x@(ConT n) =
           do
@@ -274,7 +310,7 @@ expandSynsWith settings = expandSyns'
                   then fail (packagename++": expandSynsWith: Underapplied type synonym: "++show(n,acc))
                   else
                       let
-                          substs = zip vars acc
+                          substs = zip vars (filterTANormals acc)
                           expanded = foldr subst body substs
                       in
                         go (drop (length vars) acc) expanded
@@ -284,11 +320,8 @@ expandSynsWith settings = expandSyns'
       go acc (SigT t kind) =
           do
             (acc',t') <- go acc t
-            return
-              (acc',
-                SigT t' kind
-                -- No expansion needed in kinds (todo: is this correct?)
-              )
+            kind' <- expandKindSyns' kind
+            return (acc', SigT t' kind')
 #endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
@@ -331,6 +364,24 @@ expandSynsWith settings = expandSyns'
       go acc x@(UnboxedSumT _) = passThrough acc x
 #endif
 
+#if MIN_VERSION_template_haskell(2,15,0)
+      go acc (AppKindT t k) =
+          do
+            k' <- expandKindSyns' k
+            go (TyArg k':acc) t
+      go acc (ImplicitParamT n t) =
+          do
+            (acc',t') <- go acc t
+            return (acc',ImplicitParamT n t')
+#endif
+
+-- | An argument to a type, either a normal type ('TANormal') or a visible
+-- kind application ('TyArg').
+data TypeArg
+  = TANormal Type -- Normal arguments
+  | TyArg    Kind -- Visible kind applications
+  deriving Show
+
 class SubstTypeVariable a where
     -- | Capture-free substitution
     subst :: (Name, Type) -> a -> a
@@ -352,7 +403,7 @@ instance SubstTypeVariable Type where
       go s@(TupleT _) = s
 
 #if MIN_VERSION_template_haskell(2,4,0)
-      go (SigT t1 kind) = SigT (go t1) kind
+      go (SigT t1 kind) = SigT (go t1) (subst (v, t) kind)
 #endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
@@ -384,6 +435,11 @@ instance SubstTypeVariable Type where
       go s@(UnboxedSumT _) = s
 #endif
 
+#if MIN_VERSION_template_haskell(2,15,0)
+      go (AppKindT ty ki) = AppKindT (go ty) (go ki)
+      go (ImplicitParamT n ty) = ImplicitParamT n (go ty)
+#endif
+
 -- testCapture :: Type
 -- testCapture =
 --     let
@@ -402,6 +458,10 @@ instance SubstTypeVariable Pred where
     subst s = mapPred (subst s)
 #endif
 
+#if MIN_VERSION_template_haskell(2,4,0) && !MIN_VERSION_template_haskell(2,8,0)
+instance SubstTypeVariable Kind where
+    subst _ = id -- No kind variables on old versions of GHC
+#endif
 
 -- | Make a name (based on the first arg) that's distinct from every name in the second arg
 --
