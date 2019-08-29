@@ -1,0 +1,5 @@
+resolver: ghc-8.8
+packages:
+    - .
+extra-deps:
+    - syb-0.7.1@sha256:8d37b1e4d04a9aa8512dc6c2a06e02afc015a2fd3e735bdfeeacb5e2e853323c,2462
