@@ -1,6 +1,7 @@
-## next
+## 0.4.5.0
 
-* Support GHC 8.6 / template-haskell-2.14
+* Support GHC 8.8 / template-haskell-2.15 (Thanks to Ryan Scott)
+* Support GHC 8.6 / template-haskell-2.14 (Thanks to Chaitanya Koparkar)
 
 ## 0.4.4.0
 
