@@ -206,6 +206,10 @@ decIsSyn settings = go
     go (ImplicitParamBindD {}) = no
 #endif
 
+#if MIN_VERSION_template_haskell(2,16,0)
+    go (KiSigD {}) = no
+#endif
+
     no = return Nothing
 
 #if MIN_VERSION_template_haskell(2,4,0)
@@ -270,6 +274,12 @@ expandSynsWith settings = expandSyns'
       -- Must only be called on an `x' requiring no expansion
       passThrough acc x = return (acc, x)
 
+      forallAppError :: [TypeArg] -> Type -> Q a
+      forallAppError acc x =
+          fail (packagename++": Unexpected application of the local quantification: "
+                ++show x
+                ++"\n    (to the arguments "++show acc++")")
+
       -- If @go args t = (args', t')@,
       --
       -- Precondition:
@@ -290,10 +300,7 @@ expandSynsWith settings = expandSyns'
         t' <- expandSyns' t
         return ([], ForallT ns cxt' t')
 
-      go acc x@(ForallT _ _ _) =
-          fail (packagename++": Unexpected application of the local quantification: "
-                ++show x
-                ++"\n    (to the arguments "++show acc++")")
+      go acc x@ForallT{} = forallAppError acc x
 
       go acc (AppT t1 t2) =
           do
@@ -311,7 +318,7 @@ expandSynsWith settings = expandSyns'
                   else
                       let
                           substs = zip vars (filterTANormals acc)
-                          expanded = foldr subst body substs
+                          expanded = doSubsts substs body
                       in
                         go (drop (length vars) acc) expanded
 
@@ -375,6 +382,14 @@ expandSynsWith settings = expandSyns'
             return (acc',ImplicitParamT n t')
 #endif
 
+#if MIN_VERSION_template_haskell(2,16,0)
+      go [] (ForallVisT ns t) = do
+        t' <- expandSyns' t
+        return ([], ForallVisT ns t')
+
+      go acc x@ForallVisT{} = forallAppError acc x
+#endif
+
 -- | An argument to a type, either a normal type ('TANormal') or a visible
 -- kind application ('TyArg').
 data TypeArg
@@ -389,7 +404,7 @@ class SubstTypeVariable a where
 
 
 instance SubstTypeVariable Type where
-  subst (v, t) = go
+  subst vt@(v, t) = go
     where
       go (AppT x y) = AppT (go x) (go y)
       go s@(ConT _) = s
@@ -398,12 +413,13 @@ instance SubstTypeVariable Type where
       go ArrowT = ArrowT
       go ListT = ListT
       go (ForallT vars cxt body) =
-          commonForallCase (v,t) (vars,cxt,body)
+          commonForallCase vt vars $ \vts' vars' ->
+          ForallT vars' (map (doSubsts vts') cxt) (doSubsts vts' body)
 
       go s@(TupleT _) = s
 
 #if MIN_VERSION_template_haskell(2,4,0)
-      go (SigT t1 kind) = SigT (go t1) (subst (v, t) kind)
+      go (SigT t1 kind) = SigT (go t1) (subst vt kind)
 #endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
@@ -438,6 +454,12 @@ instance SubstTypeVariable Type where
 #if MIN_VERSION_template_haskell(2,15,0)
       go (AppKindT ty ki) = AppKindT (go ty) (go ki)
       go (ImplicitParamT n ty) = ImplicitParamT n (go ty)
+#endif
+
+#if MIN_VERSION_template_haskell(2,16,0)
+      go (ForallVisT vars body) =
+          commonForallCase vt vars $ \vts' vars' ->
+          ForallVisT vars' (doSubsts vts' body)
 #endif
 
 -- testCapture :: Type
@@ -501,15 +523,16 @@ evades ns t = foldr c [] ns
 --               evade v (AppT (VarT v) (VarT (mkName "fx")))
 
 instance SubstTypeVariable Con where
-  subst (v,t) = go
+  subst vt = go
     where
-      st = subst (v,t)
+      st = subst vt
 
       go (NormalC n ts) = NormalC n [(x, st y) | (x,y) <- ts]
       go (RecC n ts) = RecC n [(x, y, st z) | (x,y,z) <- ts]
       go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
       go (ForallC vars cxt body) =
-          commonForallCase (v,t) (vars,cxt,body)
+          commonForallCase vt vars $ \vts' vars' ->
+          ForallC vars' (map (doSubsts vts') cxt) (doSubsts vts' body)
 #if MIN_VERSION_template_haskell(2,11,0)
       go c@GadtC{} = errGadt c
       go c@RecGadtC{} = errGadt c
@@ -529,16 +552,16 @@ instance HasForallConstruct Con where
 
 
 
-commonForallCase :: (SubstTypeVariable a, HasForallConstruct a) =>
-
-                    (Name,Type)
-                 -> ([TyVarBndr],Cxt,a)
+-- Apply a substitution to something underneath a @forall@. The continuation
+-- argument provides new substitutions and fresh type variable binders to avoid
+-- the outer substitution from capturing the thing underneath the @forall@.
+commonForallCase :: (Name, Type) -> [TyVarBndr]
+                 -> ([(Name, Type)] -> [TyVarBndr] -> a)
                  -> a
-commonForallCase vt@(v,t) (bndrs,cxt,body)
-
+commonForallCase vt@(v,t) bndrs k
             -- If a variable with the same name as the one to be replaced is bound by the forall,
             -- the variable to be replaced is shadowed in the body, so we leave the whole thing alone (no recursion)
-          | v `elem` (tyVarBndrGetName <$> bndrs) = mkForall bndrs cxt body
+          | v `elem` (tyVarBndrGetName <$> bndrs) = k [vt] bndrs
 
           | otherwise =
               let
@@ -547,16 +570,12 @@ commonForallCase vt@(v,t) (bndrs,cxt,body)
                   freshes = evades vars t
                   freshTyVarBndrs = zipWith tyVarBndrSetName freshes bndrs
                   substs = zip vars (VarT <$> freshes)
-                  doSubsts :: SubstTypeVariable b => b -> b
-                  doSubsts x = foldr subst x substs
-
               in
-                mkForall
-                  freshTyVarBndrs
-                  (fmap (subst vt . doSubsts) cxt )
-                  (     (subst vt . doSubsts) body)
+                k (vt:substs) freshTyVarBndrs
 
-
+-- Apply multiple substitutions.
+doSubsts :: SubstTypeVariable a => [(Name, Type)] -> a -> a
+doSubsts substs x = foldr subst x substs
 
 -- | Capture-free substitution
 substInType :: (Name,Type) -> Type -> Type
