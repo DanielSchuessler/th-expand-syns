@@ -30,16 +30,14 @@ packagename = "th-expand-syns"
 
 
 -- Compatibility layer for TH >=2.4 vs. 2.3
-tyVarBndrGetName :: TyVarBndr -> Name
+tyVarBndrGetName :: TyVarBndr' flag -> Name
 #if !MIN_VERSION_template_haskell(2,10,0)
 mapPred :: (Type -> Type) -> Pred -> Pred
 #endif
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
-tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
+tyVarBndrSetName :: Name -> TyVarBndr' flag -> TyVarBndr' flag
 
 #if MIN_VERSION_template_haskell(2,4,0)
-tyVarBndrGetName (PlainTV n) = n
-tyVarBndrGetName (KindedTV n _) = n
 
 #if MIN_VERSION_template_haskell(2,10,0)
 bindPred = id
@@ -51,11 +49,24 @@ bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
 bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
 #endif
 
+
+#if MIN_VERSION_template_haskell(2,17,0)
+type TyVarBndr' = TyVarBndr
+tyVarBndrGetName (PlainTV n _) = n
+tyVarBndrGetName (KindedTV n _ _) = n
+tyVarBndrSetName n (PlainTV _ x) = PlainTV n x
+tyVarBndrSetName n (KindedTV _ k x) = KindedTV n k x
+#else
+type TyVarBndr' flag = TyVarBndr
+tyVarBndrGetName (PlainTV n) = n
+tyVarBndrGetName (KindedTV n _) = n
 tyVarBndrSetName n (PlainTV _) = PlainTV n
 tyVarBndrSetName n (KindedTV _ k) = KindedTV n k
+#endif
+
 #else
 
-type TyVarBndr = Name
+type TyVarBndr' flag = Name
 type Pred = Type
 tyVarBndrGetName = id
 mapPred = id
@@ -542,7 +553,11 @@ instance SubstTypeVariable Con where
 
 
 class HasForallConstruct a where
+#if MIN_VERSION_template_haskell(2,17,0)
+    mkForall :: [TyVarBndr' Specificity] -> Cxt -> a -> a
+#else
     mkForall :: [TyVarBndr] -> Cxt -> a -> a
+#endif
 
 instance HasForallConstruct Type where
     mkForall = ForallT
@@ -555,8 +570,8 @@ instance HasForallConstruct Con where
 -- Apply a substitution to something underneath a @forall@. The continuation
 -- argument provides new substitutions and fresh type variable binders to avoid
 -- the outer substitution from capturing the thing underneath the @forall@.
-commonForallCase :: (Name, Type) -> [TyVarBndr]
-                 -> ([(Name, Type)] -> [TyVarBndr] -> a)
+commonForallCase :: (Name, Type) -> [TyVarBndr' flag]
+                 -> ([(Name, Type)] -> [TyVarBndr' flag] -> a)
                  -> a
 commonForallCase vt@(v,t) bndrs k
             -- If a variable with the same name as the one to be replaced is bound by the forall,
