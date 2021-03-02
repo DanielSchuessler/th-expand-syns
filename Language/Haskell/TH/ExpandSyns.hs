@@ -28,42 +28,55 @@ import Prelude
 packagename :: String
 packagename = "th-expand-syns"
 
-
--- Compatibility layer for TH >=2.4 vs. 2.3
-tyVarBndrGetName :: TyVarBndr -> Name
-#if !MIN_VERSION_template_haskell(2,10,0)
-mapPred :: (Type -> Type) -> Pred -> Pred
+#if !MIN_VERSION_template_haskell(2,4,0)
+type TyVarBndr = Name
+type Pred = Type
 #endif
-bindPred :: (Type -> Q Type) -> Pred -> Q Pred
-tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
 
-#if MIN_VERSION_template_haskell(2,4,0)
+#if MIN_VERSION_template_haskell(2,17,0)
+tyVarBndrGetName :: TyVarBndr a -> Name
+tyVarBndrGetName (PlainTV n _) = n
+tyVarBndrGetName (KindedTV n _ _) = n
+#elif MIN_VERSION_template_haskell(2,4,0)
+tyVarBndrGetName :: TyVarBndr -> Name
 tyVarBndrGetName (PlainTV n) = n
 tyVarBndrGetName (KindedTV n _) = n
-
-#if MIN_VERSION_template_haskell(2,10,0)
-bindPred = id
 #else
-mapPred f (ClassP n ts) = ClassP n (f <$> ts)
-mapPred f (EqualP t1 t2) = EqualP (f t1) (f t2)
-
-bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
-bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
+tyVarBndrGetName = id
 #endif
 
+#if MIN_VERSION_template_haskell(2,17,0)
+tyVarBndrSetName :: Name -> TyVarBndr a -> TyVarBndr a
+tyVarBndrSetName n (PlainTV _ f) = PlainTV n f
+tyVarBndrSetName n (KindedTV _ f k) = KindedTV n f k
+#elif MIN_VERSION_template_haskell(2,4,0)
+tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
 tyVarBndrSetName n (PlainTV _) = PlainTV n
 tyVarBndrSetName n (KindedTV _ k) = KindedTV n k
 #else
-
-type TyVarBndr = Name
-type Pred = Type
-tyVarBndrGetName = id
-mapPred = id
-bindPred = id
 tyVarBndrSetName n _ = n
-
 #endif
 
+#if MIN_VERSION_template_haskell(2,10,0)
+-- mapPred is not needed for template-haskell >= 2.10
+#elif MIN_VERSION_template_haskell(2,4,0)
+mapPred :: (Type -> Type) -> Pred -> Pred
+mapPred f (ClassP n ts) = ClassP n (f <$> ts)
+mapPred f (EqualP t1 t2) = EqualP (f t1) (f t2)
+#else
+mapPred = id
+#endif
+
+#if MIN_VERSION_template_haskell(2,10,0)
+bindPred :: (Type -> Q Type) -> Pred -> Q Pred
+bindPred = id
+#elif MIN_VERSION_template_haskell(2,4,0)
+bindPred :: (Type -> Q Type) -> Pred -> Q Pred
+bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
+bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
+#else
+bindPred = id
+#endif
 
 #if __GLASGOW_HASKELL__ < 709
 (<$>) :: (Functor f) => (a -> b) -> f a -> f b
@@ -390,6 +403,10 @@ expandSynsWith settings = expandSyns'
       go acc x@ForallVisT{} = forallAppError acc x
 #endif
 
+#if MIN_VERSION_template_haskell(2,17,0)
+      go acc x@MulArrowT = passThrough acc x
+#endif
+
 -- | An argument to a type, either a normal type ('TANormal') or a visible
 -- kind application ('TyArg').
 data TypeArg
@@ -460,6 +477,10 @@ instance SubstTypeVariable Type where
       go (ForallVisT vars body) =
           commonForallCase vt vars $ \vts' vars' ->
           ForallVisT vars' (doSubsts vts' body)
+#endif
+
+#if MIN_VERSION_template_haskell(2,17,0)
+      go MulArrowT = MulArrowT
 #endif
 
 -- testCapture :: Type
@@ -542,7 +563,11 @@ instance SubstTypeVariable Con where
 
 
 class HasForallConstruct a where
+#if MIN_VERSION_template_haskell(2,17,0)
+    mkForall :: [TyVarBndrSpec] -> Cxt -> a -> a
+#else
     mkForall :: [TyVarBndr] -> Cxt -> a -> a
+#endif
 
 instance HasForallConstruct Type where
     mkForall = ForallT
@@ -555,9 +580,15 @@ instance HasForallConstruct Con where
 -- Apply a substitution to something underneath a @forall@. The continuation
 -- argument provides new substitutions and fresh type variable binders to avoid
 -- the outer substitution from capturing the thing underneath the @forall@.
+#if MIN_VERSION_template_haskell(2,17,0)
+commonForallCase :: (Name, Type) -> [TyVarBndr flag]
+                 -> ([(Name, Type)] -> [TyVarBndr flag] -> a)
+                 -> a
+#else
 commonForallCase :: (Name, Type) -> [TyVarBndr]
                  -> ([(Name, Type)] -> [TyVarBndr] -> a)
                  -> a
+#endif
 commonForallCase vt@(v,t) bndrs k
             -- If a variable with the same name as the one to be replaced is bound by the forall,
             -- the variable to be replaced is shadowed in the body, so we leave the whole thing alone (no recursion)
