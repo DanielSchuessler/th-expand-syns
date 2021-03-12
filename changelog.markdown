@@ -1,7 +1,7 @@
-## next [????.??.??]
+## 0.4.8.0 [2021.03.12]
 
 * Make the test suite compile with GHC 9.0 or later.
-* Drop support for pre-7.0 versions of GHC
+* Drop support for pre-7.0 versions of GHC.
 
 ## 0.4.7.0
 
