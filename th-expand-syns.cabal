@@ -6,7 +6,7 @@ category:            Template Haskell
 license:             BSD3
 license-file:        LICENSE
 author:              Daniel Schüssler
-maintainer:          haskell.5wlh@gishpuppy.com
+maintainer:          Ryan Scott <ryan.gl.scott@gmail.com>
 cabal-version:       >= 1.10
 build-type:          Simple
 extra-source-files:  changelog.markdown
