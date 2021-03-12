@@ -1,0 +1,59 @@
+setup-info:
+  ghc:
+    linux-aarch64:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-aarch64-deb9-linux.tar.xz"
+            content-length: 313140140
+            sha1: 82e235bc168a477bc8e01607748dcc3e1561d020
+            sha256: a10621a03d016bc532cc818e2e9e4bcf355b3e09b1b2296958c0111389138854
+    linux32:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-i386-deb9-linux.tar.xz"
+            content-length: 215047224
+            sha1: 92ce7ac5fc4a7aeebb9c75abeeb0ddc15affda2c
+            sha256: a533641720c33f953ca5d100bc7da219d4cf52eae081c94c97b9ac4cbd9c1d06
+    macosx:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-apple-darwin.tar.xz"
+            content-length: 192621180
+            sha1: 9aa8ac0add9766a72973d5c498446e1ba7c12b80
+            sha256: fb85a78f2bdad53c591261e21c80f3f50fa2b68bbb22632d9be6960af7b27813
+    linux64-gmp4:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-centos7-linux.tar.xz"
+            content-length: 202181944
+            sha1: 9452c9f13102432cdd9eef2cc745f5dd34b3475b
+            sha256: 5f6cd94e0d3917fa5c87031706e665f5d9b997f5c991c9c4c4e2900c39dc98ac
+    linux64:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-deb9-linux.tar.xz"
+            content-length: 214032316
+            sha1: 7d8127072037427b64a42cefc86fce4e257ac5df
+            sha256: d44ab6f933292066d3f4bafc7e1a4209f8044069f9360bd60a97d2de05a73db2
+    linux64-tinfo6:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-fedora27-linux.tar.xz"
+            content-length: 216354916
+            sha1: 701a5862752f522c70b9c26613edbc3be816850f
+            sha256: 2711afabbaab7abd1b8fdf846802ce6ca8e531641d64bbf75780d4de64180dca
+    freebsd64:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-unknown-freebsd.tar.xz"
+            content-length: 179380672
+            sha1: 48b3bb9eada4c5afa0a6c3974dacdad2c9000870
+            sha256: 1e094cbbf9636b1f231bc99e44197fe7a05f570cf46f079bba1a0ca796c3c30c
+    windows64:
+        9.0.0.20200925:
+            url: "https://downloads.haskell.org/ghc/9.0.1-alpha1/ghc-9.0.0.20200925-x86_64-unknown-mingw32.tar.xz"
+            content-length: 143960768
+            sha1: 4192d866fc6f2e14ffac7a1d5223991a5c3a8dd2
+            sha256: 9c0d88165a9ea4b6307a01a356fc4dbf25b101aabe1694c576986f7a678e30f7
+
+resolver: ghc-9.0.0.20200925
+compiler: ghc-9.0.0.20200925
+compiler-check: match-exact
+packages:
+- .
+extra-deps:
+- git: https://github.com/dreixel/syb
+  commit: 95798bd73bc431e67b462573d181f9e0ab0dc497

@@ -1,3 +1,7 @@
+## 0.4.7.0
+
+* Support GHC 9.0 / template-haskell-2.17 (Thanks to @mgsloan)
+
 ## 0.4.5.0
 
 * Support GHC 8.8 / template-haskell-2.15 (Thanks to Ryan Scott)

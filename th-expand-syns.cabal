@@ -1,5 +1,5 @@
 name:                th-expand-syns
-version:             0.4.6.0
+version:             0.4.7.0
 synopsis:            Expands type synonyms in Template Haskell ASTs
 description:         Expands type synonyms in Template Haskell ASTs.
 category:            Template Haskell
@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Daniel Schüssler
 maintainer:          haskell.5wlh@gishpuppy.com
-cabal-version:       >= 1.8
+cabal-version:       >= 1.10
 build-type:          Simple
 extra-source-files:  changelog.markdown
 homepage:            https://github.com/DanielSchuessler/th-expand-syns
@@ -27,6 +27,7 @@ Library
     ghc-options:
     exposed-modules:     Language.Haskell.TH.ExpandSyns
     other-modules:       Language.Haskell.TH.ExpandSyns.SemigroupCompat
+    default-language:    Haskell2010
 
 Test-Suite test-th-expand-syns
     type:               exitcode-stdio-1.0
@@ -34,3 +35,4 @@ Test-Suite test-th-expand-syns
     main-is:            Main.hs
     other-modules:      Util, Types
     build-depends:      base, th-expand-syns, template-haskell
+    default-language:   Haskell2010
