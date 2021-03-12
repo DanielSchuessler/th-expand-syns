@@ -4,8 +4,7 @@
 {-# LANGUAGE KindSignatures #-}
 module Types where
 
-import Language.Haskell.TH
-import Language.Haskell.TH.Datatype.TyVarBndr
+import Language.Haskell.TH.Lib
 import Language.Haskell.TH.Syntax
 import Util
 

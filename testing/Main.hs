@@ -3,15 +3,14 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
--- {-# OPTIONS -ddump-splices #-}
 
 import Language.Haskell.TH.Datatype.TyVarBndr
 import Language.Haskell.TH.ExpandSyns
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
 import Util
 import Types
 
+main :: IO ()
 main = do
     putStrLn "Basic test..."
     $(mkTest  [t| forall a. Show a => a -> ForAll [] -> (Int,ApplyToInteger []) |]

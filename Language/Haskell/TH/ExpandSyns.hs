@@ -1,4 +1,3 @@
-{-# OPTIONS -Wall -fno-warn-unused-binds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
@@ -20,6 +19,10 @@ import Data.Generics
 import Data.Maybe
 import Control.Monad
 import Prelude
+
+#if !(MIN_VERSION_base(4,8,0))
+import Control.Applicative
+#endif
 
 -- For ghci
 #ifndef MIN_VERSION_template_haskell
@@ -46,17 +49,8 @@ bindPred = id
 #else
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
 bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
-bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
+bindPred f (EqualP t1 t2) = (EqualP <$> f t1) `ap` f t2
 #endif
-
-#if __GLASGOW_HASKELL__ < 709
-(<$>) :: (Functor f) => (a -> b) -> f a -> f b
-(<$>) = fmap
-#endif
-(<*>) :: (Monad m) => m (a -> b) -> m a -> m b
-(<*>) = ap
-
-
 
 data SynonymExpansionSettings =
   SynonymExpansionSettings {
@@ -519,18 +513,6 @@ instance SubstTypeVariable Con where
 
       errGadt c = error (packagename++": substInCon currently doesn't support GADT constructors with GHC >= 8 ("++pprint c++")")
 #endif
-
-
-class HasForallConstruct a where
-    mkForall :: [TyVarBndrSpec] -> Cxt -> a -> a
-
-instance HasForallConstruct Type where
-    mkForall = ForallT
-
-instance HasForallConstruct Con where
-    mkForall = ForallC
-
-
 
 -- Apply a substitution to something underneath a @forall@. The continuation
 -- argument provides new substitutions and fresh type variable binders to avoid
