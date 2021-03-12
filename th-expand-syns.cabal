@@ -27,7 +27,7 @@ tested-with:
 
 source-repository head
  type: git
- location: git://github.com/DanielSchuessler/th-expand-syns.git
+ location: https://github.com/DanielSchuessler/th-expand-syns.git
 
 Library
     build-depends:       base >= 4 && < 5, template-haskell < 2.18, syb, containers
