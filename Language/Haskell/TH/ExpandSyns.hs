@@ -12,6 +12,7 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                      ,substInCon
                                      ,evades,evade) where
 
+import Language.Haskell.TH.Datatype.TyVarBndr
 import Language.Haskell.TH.ExpandSyns.SemigroupCompat as Sem
 import Language.Haskell.TH hiding(cxt)
 import qualified Data.Set as Set
@@ -28,25 +29,8 @@ import Prelude
 packagename :: String
 packagename = "th-expand-syns"
 
-#if MIN_VERSION_template_haskell(2,17,0)
-tyVarBndrGetName :: TyVarBndr a -> Name
-tyVarBndrGetName (PlainTV n _) = n
-tyVarBndrGetName (KindedTV n _ _) = n
-#else
-tyVarBndrGetName :: TyVarBndr -> Name
-tyVarBndrGetName (PlainTV n) = n
-tyVarBndrGetName (KindedTV n _) = n
-#endif
-
-#if MIN_VERSION_template_haskell(2,17,0)
-tyVarBndrSetName :: Name -> TyVarBndr a -> TyVarBndr a
-tyVarBndrSetName n (PlainTV _ f) = PlainTV n f
-tyVarBndrSetName n (KindedTV _ f k) = KindedTV n f k
-#else
-tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
-tyVarBndrSetName n (PlainTV _) = PlainTV n
-tyVarBndrSetName n (KindedTV _ k) = KindedTV n k
-#endif
+tyVarBndrSetName :: Name -> TyVarBndr_ flag -> TyVarBndr_ flag
+tyVarBndrSetName n = mapTVName (const n)
 
 #if MIN_VERSION_template_haskell(2,10,0)
 -- mapPred is not needed for template-haskell >= 2.10
@@ -144,7 +128,7 @@ nameIsSyn settings n = do
 decIsSyn :: SynonymExpansionSettings -> Dec -> Q (Maybe SynInfo)
 decIsSyn settings = go
   where
-    go (TySynD _ vars t) = return (Just (tyVarBndrGetName <$> vars,t))
+    go (TySynD _ vars t) = return (Just (tvName <$> vars,t))
 
 #if MIN_VERSION_template_haskell(2,11,0)
     go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily settings name >> no
@@ -538,11 +522,7 @@ instance SubstTypeVariable Con where
 
 
 class HasForallConstruct a where
-#if MIN_VERSION_template_haskell(2,17,0)
     mkForall :: [TyVarBndrSpec] -> Cxt -> a -> a
-#else
-    mkForall :: [TyVarBndr] -> Cxt -> a -> a
-#endif
 
 instance HasForallConstruct Type where
     mkForall = ForallT
@@ -555,24 +535,18 @@ instance HasForallConstruct Con where
 -- Apply a substitution to something underneath a @forall@. The continuation
 -- argument provides new substitutions and fresh type variable binders to avoid
 -- the outer substitution from capturing the thing underneath the @forall@.
-#if MIN_VERSION_template_haskell(2,17,0)
-commonForallCase :: (Name, Type) -> [TyVarBndr flag]
-                 -> ([(Name, Type)] -> [TyVarBndr flag] -> a)
+commonForallCase :: (Name, Type) -> [TyVarBndr_ flag]
+                 -> ([(Name, Type)] -> [TyVarBndr_ flag] -> a)
                  -> a
-#else
-commonForallCase :: (Name, Type) -> [TyVarBndr]
-                 -> ([(Name, Type)] -> [TyVarBndr] -> a)
-                 -> a
-#endif
 commonForallCase vt@(v,t) bndrs k
             -- If a variable with the same name as the one to be replaced is bound by the forall,
             -- the variable to be replaced is shadowed in the body, so we leave the whole thing alone (no recursion)
-          | v `elem` (tyVarBndrGetName <$> bndrs) = k [vt] bndrs
+          | v `elem` (tvName <$> bndrs) = k [vt] bndrs
 
           | otherwise =
               let
                   -- prevent capture
-                  vars = tyVarBndrGetName <$> bndrs
+                  vars = tvName <$> bndrs
                   freshes = evades vars t
                   freshTyVarBndrs = zipWith tyVarBndrSetName freshes bndrs
                   substs = zip vars (VarT <$> freshes)

@@ -5,6 +5,7 @@
 module Types where
 
 import Language.Haskell.TH
+import Language.Haskell.TH.Datatype.TyVarBndr
 import Language.Haskell.TH.Syntax
 import Util
 
@@ -19,7 +20,7 @@ type Int'' = Int
 type Id a = a
 
 -- type E x = forall y. Either x y -> Int
-$(sequence [tySynD (mkName "E") [PlainTV (mkName "x")]
+$(sequence [tySynD (mkName "E") [plainTV (mkName "x")]
                 (forallT'' ["y"] (conT ''Either `appT` varT' "x" `appT` varT' "y" --> conT ''Int))
            ])
 

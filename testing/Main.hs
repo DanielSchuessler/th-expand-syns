@@ -5,6 +5,7 @@
 {-# LANGUAGE CPP #-}
 -- {-# OPTIONS -ddump-splices #-}
 
+import Language.Haskell.TH.Datatype.TyVarBndr
 import Language.Haskell.TH.ExpandSyns
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
@@ -31,9 +32,9 @@ main = do
 
 -- See comment about 'PlainTV'/'KindedTV' above
 #if MIN_VERSION_template_haskell(2,10,0)
-        y_0 = KindedTV (mkName "y_0") StarT
+        y_0 = kindedTVSpecified (mkName "y_0") StarT
 #else
-        y_0 = PlainTV (mkName "y_0")
+        y_0 = plainTVSpecified (mkName "y_0")
 #endif
 
         expectedExpansion =

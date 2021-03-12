@@ -34,6 +34,7 @@ Library
     build-depends:       base             >= 4.3 && < 5
                        , containers
                        , syb
+                       , th-abstraction   >= 0.4 && < 0.5
                        , template-haskell >= 2.5 && < 2.18
     ghc-options:
     exposed-modules:     Language.Haskell.TH.ExpandSyns
@@ -47,5 +48,6 @@ Test-Suite test-th-expand-syns
     other-modules:      Util, Types
     build-depends:      base
                       , template-haskell
+                      , th-abstraction
                       , th-expand-syns
     default-language:   Haskell2010
