@@ -1,3 +1,7 @@
+## next [????.??.??]
+
+* Drop support for pre-7.0 versions of GHC
+
 ## 0.4.7.0
 
 * Support GHC 9.0 / template-haskell-2.17 (Thanks to @mgsloan)

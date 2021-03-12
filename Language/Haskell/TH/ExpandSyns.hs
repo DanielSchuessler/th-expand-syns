@@ -28,54 +28,41 @@ import Prelude
 packagename :: String
 packagename = "th-expand-syns"
 
-#if !MIN_VERSION_template_haskell(2,4,0)
-type TyVarBndr = Name
-type Pred = Type
-#endif
-
 #if MIN_VERSION_template_haskell(2,17,0)
 tyVarBndrGetName :: TyVarBndr a -> Name
 tyVarBndrGetName (PlainTV n _) = n
 tyVarBndrGetName (KindedTV n _ _) = n
-#elif MIN_VERSION_template_haskell(2,4,0)
+#else
 tyVarBndrGetName :: TyVarBndr -> Name
 tyVarBndrGetName (PlainTV n) = n
 tyVarBndrGetName (KindedTV n _) = n
-#else
-tyVarBndrGetName = id
 #endif
 
 #if MIN_VERSION_template_haskell(2,17,0)
 tyVarBndrSetName :: Name -> TyVarBndr a -> TyVarBndr a
 tyVarBndrSetName n (PlainTV _ f) = PlainTV n f
 tyVarBndrSetName n (KindedTV _ f k) = KindedTV n f k
-#elif MIN_VERSION_template_haskell(2,4,0)
+#else
 tyVarBndrSetName :: Name -> TyVarBndr -> TyVarBndr
 tyVarBndrSetName n (PlainTV _) = PlainTV n
 tyVarBndrSetName n (KindedTV _ k) = KindedTV n k
-#else
-tyVarBndrSetName n _ = n
 #endif
 
 #if MIN_VERSION_template_haskell(2,10,0)
 -- mapPred is not needed for template-haskell >= 2.10
-#elif MIN_VERSION_template_haskell(2,4,0)
+#else
 mapPred :: (Type -> Type) -> Pred -> Pred
 mapPred f (ClassP n ts) = ClassP n (f <$> ts)
 mapPred f (EqualP t1 t2) = EqualP (f t1) (f t2)
-#else
-mapPred = id
 #endif
 
 #if MIN_VERSION_template_haskell(2,10,0)
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
 bindPred = id
-#elif MIN_VERSION_template_haskell(2,4,0)
+#else
 bindPred :: (Type -> Q Type) -> Pred -> Q Pred
 bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
 bindPred f (EqualP t1 t2) = EqualP <$> f t1 <*> f t2
-#else
-bindPred = id
 #endif
 
 #if __GLASGOW_HASKELL__ < 709
@@ -184,22 +171,18 @@ decIsSyn settings = go
     go (InfixD {}) = no
 #endif
 
-#if MIN_VERSION_template_haskell(2,4,0)
     go (PragmaD {}) = no
-#endif
 
     -- Nothing to expand for data families, so no warning
 #if MIN_VERSION_template_haskell(2,11,0)
     go (DataFamilyD {}) = no
-#elif MIN_VERSION_template_haskell(2,4,0)
+#else
     go (FamilyD DataFam _ _ _) = no
 #endif
 
-#if MIN_VERSION_template_haskell(2,4,0)
     go (DataInstD {}) = no
     go (NewtypeInstD {}) = no
     go (TySynInstD {}) = no
-#endif
 
 #if MIN_VERSION_template_haskell(2,9,0)
     go (RoleAnnotD {}) = no
@@ -225,12 +208,10 @@ decIsSyn settings = go
 
     no = return Nothing
 
-#if MIN_VERSION_template_haskell(2,4,0)
 maybeWarnTypeFamily :: SynonymExpansionSettings -> Name -> Q ()
 maybeWarnTypeFamily settings name =
   when (sesWarnTypeFamilies settings) $
       warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
-#endif
 
 
 
@@ -253,15 +234,13 @@ expandSynsWith settings = expandSyns'
            (acc,t') <- go [] t
            return (foldl applyTypeArg t' acc)
 
-#if MIN_VERSION_template_haskell(2,4,0)
       expandKindSyns' k =
-# if MIN_VERSION_template_haskell(2,8,0)
+#if MIN_VERSION_template_haskell(2,8,0)
          do
            (acc,k') <- go [] k
            return (foldl applyTypeArg k' acc)
-# else
+#else
          return k -- No kind variables on old versions of GHC
-# endif
 #endif
 
       applyTypeArg :: Type -> TypeArg -> Type
@@ -336,13 +315,11 @@ expandSynsWith settings = expandSyns'
                         go (drop (length vars) acc) expanded
 
 
-#if MIN_VERSION_template_haskell(2,4,0)
       go acc (SigT t kind) =
           do
             (acc',t') <- go acc t
             kind' <- expandKindSyns' kind
             return (acc', SigT t' kind')
-#endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
       go acc x@(UnboxedTupleT _) = passThrough acc x
@@ -435,9 +412,7 @@ instance SubstTypeVariable Type where
 
       go s@(TupleT _) = s
 
-#if MIN_VERSION_template_haskell(2,4,0)
       go (SigT t1 kind) = SigT (go t1) (subst vt kind)
-#endif
 
 #if MIN_VERSION_template_haskell(2,6,0)
       go s@(UnboxedTupleT _) = s
@@ -496,12 +471,12 @@ instance SubstTypeVariable Type where
 --                    (v "x" `AppT` v "y"))
 
 
-#if MIN_VERSION_template_haskell(2,4,0) && !MIN_VERSION_template_haskell(2,10,0)
+#if !MIN_VERSION_template_haskell(2,10,0)
 instance SubstTypeVariable Pred where
     subst s = mapPred (subst s)
 #endif
 
-#if MIN_VERSION_template_haskell(2,4,0) && !MIN_VERSION_template_haskell(2,8,0)
+#if !MIN_VERSION_template_haskell(2,8,0)
 instance SubstTypeVariable Kind where
     subst _ = id -- No kind variables on old versions of GHC
 #endif
