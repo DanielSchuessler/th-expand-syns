@@ -13,3 +13,19 @@
   "The Haskell Programming Language"
 
 Expands type synonyms in Template Haskell ASTs.
+
+As of version `0.4.9.0`, this library is a small shim on top of the
+`applySubstitution`/`resolveTypeSynonyms` functions from `th-abstraction`, so
+you may want to consider using `th-abstraction` instead. The only pieces of
+functionality that `th-expand-syns` provides which are not currently present in
+`th-abstraction` are:
+
+* `th-expand-syns`' `expandSyns{With}` functions will warn that they cannot
+  expand type families (if the `SynonymExpansionSettings` are configured to
+  check for this). By contrast, `th-abstraction`'s `applySubstitution`
+  function will silently ignore type families.
+* `th-expand-syns` provides a `substInCon` function which allows substitution
+  into `Con`s.
+* `th-expand-syns` provides `evade{s}` functions which support type variable
+  `Name` freshening that calculating the free variables in any type that
+  provides an instance of `Data`.

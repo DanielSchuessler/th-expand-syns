@@ -1,1 +1,6 @@
 packages: .
+
+source-repository-package
+  type: git
+  location: https://github.com/glguy/th-abstraction
+  tag: 5c4934b171a4c30f4d452f18def9dd3c5148bcb2
