@@ -11,12 +11,14 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
                                      ,substInCon
                                      ,evades,evade) where
 
+import Language.Haskell.TH.Datatype
 import Language.Haskell.TH.Datatype.TyVarBndr
 import Language.Haskell.TH.ExpandSyns.SemigroupCompat as Sem
 import Language.Haskell.TH hiding(cxt)
+import qualified Data.Map as Map
+import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Generics
-import Data.Maybe
 import Control.Monad
 import Prelude
 
@@ -35,28 +37,10 @@ packagename = "th-expand-syns"
 tyVarBndrSetName :: Name -> TyVarBndr_ flag -> TyVarBndr_ flag
 tyVarBndrSetName n = mapTVName (const n)
 
-#if MIN_VERSION_template_haskell(2,10,0)
--- mapPred is not needed for template-haskell >= 2.10
-#else
-mapPred :: (Type -> Type) -> Pred -> Pred
-mapPred f (ClassP n ts) = ClassP n (f <$> ts)
-mapPred f (EqualP t1 t2) = EqualP (f t1) (f t2)
-#endif
-
-#if MIN_VERSION_template_haskell(2,10,0)
-bindPred :: (Type -> Q Type) -> Pred -> Q Pred
-bindPred = id
-#else
-bindPred :: (Type -> Q Type) -> Pred -> Q Pred
-bindPred f (ClassP n ts) = ClassP n <$> mapM f ts
-bindPred f (EqualP t1 t2) = (EqualP <$> f t1) `ap` f t2
-#endif
-
 data SynonymExpansionSettings =
   SynonymExpansionSettings {
     sesWarnTypeFamilies :: Bool
   }
-
 
 instance Semigroup SynonymExpansionSettings where
   SynonymExpansionSettings w1 <> SynonymExpansionSettings w2 =
@@ -79,7 +63,6 @@ instance Monoid SynonymExpansionSettings where
   mappend = (Sem.<>)
 #endif
 
-
 -- | Suppresses the warning that type families are unsupported.
 noWarnTypeFamilies :: SynonymExpansionSettings
 noWarnTypeFamilies = mempty { sesWarnTypeFamilies = False }
@@ -93,371 +76,178 @@ warn msg =
 #endif
       (packagename ++": WARNING: "++msg)
 
-
-
-
-type SynInfo = ([Name],Type)
-
-nameIsSyn :: SynonymExpansionSettings -> Name -> Q (Maybe SynInfo)
-nameIsSyn settings n = do
+warnIfNameIsTypeFamily :: Name -> Q ()
+warnIfNameIsTypeFamily n = do
   i <- reify n
   case i of
-    ClassI {} -> no
-    ClassOpI {} -> no
-    TyConI d -> decIsSyn settings d
+    ClassI {} -> return ()
+    ClassOpI {} -> return ()
+    TyConI d -> warnIfDecIsTypeFamily d
 #if MIN_VERSION_template_haskell(2,7,0)
-    FamilyI d _ -> decIsSyn settings d -- Called for warnings
+    FamilyI d _ -> warnIfDecIsTypeFamily d -- Called for warnings
 #endif
-    PrimTyConI {} -> no
-    DataConI {} -> no
-    VarI {} -> no
-    TyVarI {} -> no
+    PrimTyConI {} -> return ()
+    DataConI {} -> return ()
+    VarI {} -> return ()
+    TyVarI {} -> return ()
 #if MIN_VERSION_template_haskell(2,12,0)
-    PatSynI {} -> no
+    PatSynI {} -> return ()
 #endif
 
+warnIfDecIsTypeFamily :: Dec -> Q ()
+warnIfDecIsTypeFamily = go
   where
-    no = return Nothing
-
-decIsSyn :: SynonymExpansionSettings -> Dec -> Q (Maybe SynInfo)
-decIsSyn settings = go
-  where
-    go (TySynD _ vars t) = return (Just (tvName <$> vars,t))
+    go (TySynD {}) = return ()
 
 #if MIN_VERSION_template_haskell(2,11,0)
-    go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily settings name >> no
-    go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily settings name >> no
+    go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily name
+    go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily name
 #else
 
 #if MIN_VERSION_template_haskell(2,9,0)
-    go (ClosedTypeFamilyD name _ _ _) = maybeWarnTypeFamily settings name >> no
+    go (ClosedTypeFamilyD name _ _ _) = maybeWarnTypeFamily name
 #endif
 
-    go (FamilyD TypeFam name _ _) = maybeWarnTypeFamily settings name >> no
+    go (FamilyD TypeFam name _ _) = maybeWarnTypeFamily name
 #endif
 
-    go (FunD {}) = no
-    go (ValD {}) = no
-    go (DataD {}) = no
-    go (NewtypeD {}) = no
-    go (ClassD {}) = no
-    go (InstanceD {}) = no
-    go (SigD {}) = no
-    go (ForeignD {}) = no
+    go (FunD {}) = return ()
+    go (ValD {}) = return ()
+    go (DataD {}) = return ()
+    go (NewtypeD {}) = return ()
+    go (ClassD {}) = return ()
+    go (InstanceD {}) = return ()
+    go (SigD {}) = return ()
+    go (ForeignD {}) = return ()
 
 #if MIN_VERSION_template_haskell(2,8,0)
-    go (InfixD {}) = no
+    go (InfixD {}) = return ()
 #endif
 
-    go (PragmaD {}) = no
+    go (PragmaD {}) = return ()
 
     -- Nothing to expand for data families, so no warning
 #if MIN_VERSION_template_haskell(2,11,0)
-    go (DataFamilyD {}) = no
+    go (DataFamilyD {}) = return ()
 #else
-    go (FamilyD DataFam _ _ _) = no
+    go (FamilyD DataFam _ _ _) = return ()
 #endif
 
-    go (DataInstD {}) = no
-    go (NewtypeInstD {}) = no
-    go (TySynInstD {}) = no
+    go (DataInstD {}) = return ()
+    go (NewtypeInstD {}) = return ()
+    go (TySynInstD {}) = return ()
 
 #if MIN_VERSION_template_haskell(2,9,0)
-    go (RoleAnnotD {}) = no
+    go (RoleAnnotD {}) = return ()
 #endif
 
 #if MIN_VERSION_template_haskell(2,10,0)
-    go (StandaloneDerivD {}) = no
-    go (DefaultSigD {}) = no
+    go (StandaloneDerivD {}) = return ()
+    go (DefaultSigD {}) = return ()
 #endif
 
 #if MIN_VERSION_template_haskell(2,12,0)
-    go (PatSynD {}) = no
-    go (PatSynSigD {}) = no
+    go (PatSynD {}) = return ()
+    go (PatSynSigD {}) = return ()
 #endif
 
 #if MIN_VERSION_template_haskell(2,15,0)
-    go (ImplicitParamBindD {}) = no
+    go (ImplicitParamBindD {}) = return ()
 #endif
 
 #if MIN_VERSION_template_haskell(2,16,0)
-    go (KiSigD {}) = no
+    go (KiSigD {}) = return ()
 #endif
 
-    no = return Nothing
+warnTypeFamiliesInType :: Type -> Q ()
+warnTypeFamiliesInType = go
+  where
+    go :: Type -> Q ()
+    go (ConT n)     = warnIfNameIsTypeFamily n
+    go (AppT t1 t2) = go t1 >> go t2
+    go (SigT t k)   = go t  >> go_kind k
+    go ListT{}      = return ()
+    go ArrowT{}     = return ()
+    go VarT{}       = return ()
+    go TupleT{}     = return ()
+    go (ForallT tvbs ctxt body) = do
+      mapM_ (go_kind . tvKind) tvbs
+      mapM_ go_pred ctxt
+      go body
+#if MIN_VERSION_template_haskell(2,6,0)
+    go UnboxedTupleT{} = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,8,0)
+    go PromotedT{}      = return ()
+    go PromotedTupleT{} = return ()
+    go PromotedConsT{}  = return ()
+    go PromotedNilT{}   = return ()
+    go StarT{}          = return ()
+    go ConstraintT{}    = return ()
+    go LitT{}           = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,10,0)
+    go EqualityT{} = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,11,0)
+    go (InfixT t1 n t2) = do
+      warnIfNameIsTypeFamily n
+      go t1
+      go t2
+    go (UInfixT t1 n t2) = do
+      warnIfNameIsTypeFamily n
+      go t1
+      go t2
+    go (ParensT t) = go t
+    go WildCardT{} = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,12,0)
+    go UnboxedSumT{} = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,15,0)
+    go (AppKindT t k)       = go t >> go_kind k
+    go (ImplicitParamT _ t) = go t
+#endif
+#if MIN_VERSION_template_haskell(2,16,0)
+    go (ForallVisT tvbs body) = do
+      mapM_ (go_kind . tvKind) tvbs
+      go body
+#endif
+#if MIN_VERSION_template_haskell(2,17,0)
+    go MulArrowT{} = return ()
+#endif
 
-maybeWarnTypeFamily :: SynonymExpansionSettings -> Name -> Q ()
-maybeWarnTypeFamily settings name =
-  when (sesWarnTypeFamilies settings) $
-      warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
+    go_kind :: Kind -> Q ()
+#if MIN_VERSION_template_haskell(2,8,0)
+    go_kind = go
+#else
+    go_kind _ = return ()
+#endif
 
+    go_pred :: Pred -> Q ()
+#if MIN_VERSION_template_haskell(2,10,0)
+    go_pred = go
+#else
+    go_pred (ClassP _ ts)  = mapM_ go ts
+    go_pred (EqualP t1 t2) = go t1 >> go t2
+#endif
 
-
-
-
-
+maybeWarnTypeFamily :: Name -> Q ()
+maybeWarnTypeFamily name =
+  warn ("Type synonym families (and associated type synonyms) are currently not supported (they won't be expanded). Name of unsupported family: "++show name)
 
 -- | Calls 'expandSynsWith' with the default settings.
 expandSyns :: Type -> Q Type
 expandSyns = expandSynsWith mempty
 
-
 -- | Expands all type synonyms in the given type. Type families currently won't be expanded (but will be passed through).
 expandSynsWith :: SynonymExpansionSettings -> Type -> Q Type
 expandSynsWith settings = expandSyns'
-
     where
-      expandSyns' t =
-         do
-           (acc,t') <- go [] t
-           return (foldl applyTypeArg t' acc)
-
-      expandKindSyns' k =
-#if MIN_VERSION_template_haskell(2,8,0)
-         do
-           (acc,k') <- go [] k
-           return (foldl applyTypeArg k' acc)
-#else
-         return k -- No kind variables on old versions of GHC
-#endif
-
-      applyTypeArg :: Type -> TypeArg -> Type
-      applyTypeArg f (TANormal x) = f `AppT` x
-      applyTypeArg f (TyArg _x)   =
-#if __GLASGOW_HASKELL__ >= 807
-                                    f `AppKindT` _x
-#else
-                                    -- VKA isn't supported, so
-                                    -- conservatively drop the argument
-                                    f
-#endif
-
-
-      -- Filter the normal type arguments from a list of TypeArgs.
-      filterTANormals :: [TypeArg] -> [Type]
-      filterTANormals = mapMaybe getTANormal
-        where
-          getTANormal :: TypeArg -> Maybe Type
-          getTANormal (TANormal t) = Just t
-          getTANormal (TyArg {})   = Nothing
-
-      -- Must only be called on an `x' requiring no expansion
-      passThrough acc x = return (acc, x)
-
-      forallAppError :: [TypeArg] -> Type -> Q a
-      forallAppError acc x =
-          fail (packagename++": Unexpected application of the local quantification: "
-                ++show x
-                ++"\n    (to the arguments "++show acc++")")
-
-      -- If @go args t = (args', t')@,
-      --
-      -- Precondition:
-      --  All elements of `args' are expanded.
-      -- Postcondition:
-      --  All elements of `args'' and `t'' are expanded.
-      --  `t' applied to `args' equals `t'' applied to `args'' (up to expansion, of course)
-
-      go :: [TypeArg] -> Type -> Q ([TypeArg], Type)
-
-      go acc x@ListT = passThrough acc x
-      go acc x@ArrowT = passThrough acc x
-      go acc x@(TupleT _) = passThrough acc x
-      go acc x@(VarT _) = passThrough acc x
-
-      go [] (ForallT ns cxt t) = do
-        cxt' <- mapM (bindPred expandSyns') cxt
-        t' <- expandSyns' t
-        return ([], ForallT ns cxt' t')
-
-      go acc x@ForallT{} = forallAppError acc x
-
-      go acc (AppT t1 t2) =
-          do
-            r <- expandSyns' t2
-            go (TANormal r:acc) t1
-
-      go acc x@(ConT n) =
-          do
-            i <- nameIsSyn settings n
-            case i of
-              Nothing -> return (acc, x)
-              Just (vars,body) ->
-                  if length acc < length vars
-                  then fail (packagename++": expandSynsWith: Underapplied type synonym: "++show(n,acc))
-                  else
-                      let
-                          substs = zip vars (filterTANormals acc)
-                          expanded = doSubsts substs body
-                      in
-                        go (drop (length vars) acc) expanded
-
-
-      go acc (SigT t kind) =
-          do
-            (acc',t') <- go acc t
-            kind' <- expandKindSyns' kind
-            return (acc', SigT t' kind')
-
-#if MIN_VERSION_template_haskell(2,6,0)
-      go acc x@(UnboxedTupleT _) = passThrough acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,8,0)
-      go acc x@(PromotedT _) = passThrough acc x
-      go acc x@(PromotedTupleT _) = passThrough acc x
-      go acc x@PromotedConsT = passThrough acc x
-      go acc x@PromotedNilT = passThrough acc x
-      go acc x@StarT = passThrough acc x
-      go acc x@ConstraintT = passThrough acc x
-      go acc x@(LitT _) = passThrough acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,10,0)
-      go acc x@EqualityT = passThrough acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,11,0)
-      go acc (InfixT t1 nm t2) =
-          do
-            t1' <- expandSyns' t1
-            t2' <- expandSyns' t2
-            return (acc,InfixT t1' nm t2')
-      go acc (UInfixT t1 nm t2) =
-          do
-            t1' <- expandSyns' t1
-            t2' <- expandSyns' t2
-            return (acc,UInfixT t1' nm t2')
-      go acc (ParensT t) =
-          do
-            (acc',t') <- go acc t
-            return (acc',ParensT t')
-      go acc x@WildCardT = passThrough acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,12,0)
-      go acc x@(UnboxedSumT _) = passThrough acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,15,0)
-      go acc (AppKindT t k) =
-          do
-            k' <- expandKindSyns' k
-            go (TyArg k':acc) t
-      go acc (ImplicitParamT n t) =
-          do
-            (acc',t') <- go acc t
-            return (acc',ImplicitParamT n t')
-#endif
-
-#if MIN_VERSION_template_haskell(2,16,0)
-      go [] (ForallVisT ns t) = do
-        t' <- expandSyns' t
-        return ([], ForallVisT ns t')
-
-      go acc x@ForallVisT{} = forallAppError acc x
-#endif
-
-#if MIN_VERSION_template_haskell(2,17,0)
-      go acc x@MulArrowT = passThrough acc x
-#endif
-
--- | An argument to a type, either a normal type ('TANormal') or a visible
--- kind application ('TyArg').
-data TypeArg
-  = TANormal Type -- Normal arguments
-  | TyArg    Kind -- Visible kind applications
-  deriving Show
-
-class SubstTypeVariable a where
-    -- | Capture-free substitution
-    subst :: (Name, Type) -> a -> a
-
-
-
-instance SubstTypeVariable Type where
-  subst vt@(v, t) = go
-    where
-      go (AppT x y) = AppT (go x) (go y)
-      go s@(ConT _) = s
-      go s@(VarT w) | v == w = t
-                    | otherwise = s
-      go ArrowT = ArrowT
-      go ListT = ListT
-      go (ForallT vars cxt body) =
-          commonForallCase vt vars $ \vts' vars' ->
-          ForallT vars' (map (doSubsts vts') cxt) (doSubsts vts' body)
-
-      go s@(TupleT _) = s
-
-      go (SigT t1 kind) = SigT (go t1) (subst vt kind)
-
-#if MIN_VERSION_template_haskell(2,6,0)
-      go s@(UnboxedTupleT _) = s
-#endif
-
-#if MIN_VERSION_template_haskell(2,8,0)
-      go s@(PromotedT _) = s
-      go s@(PromotedTupleT _) = s
-      go s@PromotedConsT = s
-      go s@PromotedNilT = s
-      go s@StarT = s
-      go s@ConstraintT = s
-      go s@(LitT _) = s
-#endif
-
-#if MIN_VERSION_template_haskell(2,10,0)
-      go s@EqualityT = s
-#endif
-
-#if MIN_VERSION_template_haskell(2,11,0)
-      go (InfixT t1 nm t2) = InfixT (go t1) nm (go t2)
-      go (UInfixT t1 nm t2) = UInfixT (go t1) nm (go t2)
-      go (ParensT t1) = ParensT (go t1)
-      go s@WildCardT = s
-#endif
-
-#if MIN_VERSION_template_haskell(2,12,0)
-      go s@(UnboxedSumT _) = s
-#endif
-
-#if MIN_VERSION_template_haskell(2,15,0)
-      go (AppKindT ty ki) = AppKindT (go ty) (go ki)
-      go (ImplicitParamT n ty) = ImplicitParamT n (go ty)
-#endif
-
-#if MIN_VERSION_template_haskell(2,16,0)
-      go (ForallVisT vars body) =
-          commonForallCase vt vars $ \vts' vars' ->
-          ForallVisT vars' (doSubsts vts' body)
-#endif
-
-#if MIN_VERSION_template_haskell(2,17,0)
-      go MulArrowT = MulArrowT
-#endif
-
--- testCapture :: Type
--- testCapture =
---     let
---         n = mkName
---         v = VarT . mkName
---     in
---       substInType (n "x", v "y" `AppT` v "z")
---                   (ForallT
---                    [n "y",n "z"]
---                    [ConT (mkName "Show") `AppT` v "x" `AppT` v "z"]
---                    (v "x" `AppT` v "y"))
-
-
-#if !MIN_VERSION_template_haskell(2,10,0)
-instance SubstTypeVariable Pred where
-    subst s = mapPred (subst s)
-#endif
-
-#if !MIN_VERSION_template_haskell(2,8,0)
-instance SubstTypeVariable Kind where
-    subst _ = id -- No kind variables on old versions of GHC
-#endif
+      expandSyns' x = do
+        when (sesWarnTypeFamilies settings) $
+          warnTypeFamiliesInType x
+        resolveTypeSynonyms x
 
 -- | Make a name (based on the first arg) that's distinct from every name in the second arg
 --
@@ -496,17 +286,25 @@ evades ns t = foldr c [] ns
 --             in
 --               evade v (AppT (VarT v) (VarT (mkName "fx")))
 
-instance SubstTypeVariable Con where
-  subst vt = go
+-- | Capture-free substitution
+substInType :: (Name,Type) -> Type -> Type
+substInType vt = applySubstitution (Map.fromList [vt])
+
+-- | Capture-free substitution
+substInCon :: (Name,Type) -> Con -> Con
+substInCon vt = go
     where
-      st = subst vt
+      vtSubst = Map.fromList [vt]
+      st = applySubstitution vtSubst
 
       go (NormalC n ts) = NormalC n [(x, st y) | (x,y) <- ts]
       go (RecC n ts) = RecC n [(x, y, st z) | (x,y,z) <- ts]
       go (InfixC (y1,t1) op (y2,t2)) = InfixC (y1,st t1) op (y2,st t2)
       go (ForallC vars cxt body) =
           commonForallCase vt vars $ \vts' vars' ->
-          ForallC vars' (map (doSubsts vts') cxt) (doSubsts vts' body)
+          ForallC (map (mapTVKind (applySubstitution vts')) vars')
+                  (applySubstitution vts' cxt)
+                  (Map.foldrWithKey (\v t -> substInCon (v, t)) body vts')
 #if MIN_VERSION_template_haskell(2,11,0)
       go c@GadtC{} = errGadt c
       go c@RecGadtC{} = errGadt c
@@ -518,12 +316,12 @@ instance SubstTypeVariable Con where
 -- argument provides new substitutions and fresh type variable binders to avoid
 -- the outer substitution from capturing the thing underneath the @forall@.
 commonForallCase :: (Name, Type) -> [TyVarBndr_ flag]
-                 -> ([(Name, Type)] -> [TyVarBndr_ flag] -> a)
+                 -> (Map Name Type -> [TyVarBndr_ flag] -> a)
                  -> a
 commonForallCase vt@(v,t) bndrs k
             -- If a variable with the same name as the one to be replaced is bound by the forall,
             -- the variable to be replaced is shadowed in the body, so we leave the whole thing alone (no recursion)
-          | v `elem` (tvName <$> bndrs) = k [vt] bndrs
+          | v `elem` (tvName <$> bndrs) = k (Map.fromList [vt]) bndrs
 
           | otherwise =
               let
@@ -533,16 +331,4 @@ commonForallCase vt@(v,t) bndrs k
                   freshTyVarBndrs = zipWith tyVarBndrSetName freshes bndrs
                   substs = zip vars (VarT <$> freshes)
               in
-                k (vt:substs) freshTyVarBndrs
-
--- Apply multiple substitutions.
-doSubsts :: SubstTypeVariable a => [(Name, Type)] -> a -> a
-doSubsts substs x = foldr subst x substs
-
--- | Capture-free substitution
-substInType :: (Name,Type) -> Type -> Type
-substInType = subst
-
--- | Capture-free substitution
-substInCon :: (Name,Type) -> Con -> Con
-substInCon = subst
+                k (Map.fromList (vt:substs)) freshTyVarBndrs
