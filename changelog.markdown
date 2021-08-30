@@ -1,4 +1,4 @@
-## 0.4.9.0 [????.??.??]
+## 0.4.9.0 [2021.08.30]
 
 * Consolidate the type-synonym expansion functionality with `th-abstraction`,
   which also provides the ability to expand type synonyms. After this change,
