@@ -1,3 +1,8 @@
+## next [????.??.??]
+
+* Support `DefaultD`, `PromotedInfixT`, and `PromotedUInfixT` when building
+  with `template-haskell-2.19.0.0` (GHC 9.4) or later.
+
 ## 0.4.9.0 [2021.08.30]
 
 * Consolidate the type-synonym expansion functionality with `th-abstraction`,
