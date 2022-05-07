@@ -159,6 +159,10 @@ warnIfDecIsTypeFamily = go
     go (KiSigD {}) = return ()
 #endif
 
+#if MIN_VERSION_template_haskell(2,19,0)
+    go (DefaultD {}) = return ()
+#endif
+
 warnTypeFamiliesInType :: Type -> Q ()
 warnTypeFamiliesInType = go
   where
@@ -215,6 +219,16 @@ warnTypeFamiliesInType = go
 #endif
 #if MIN_VERSION_template_haskell(2,17,0)
     go MulArrowT{} = return ()
+#endif
+#if MIN_VERSION_template_haskell(2,19,0)
+    go (PromotedInfixT t1 n t2) = do
+      warnIfNameIsTypeFamily n
+      go t1
+      go t2
+    go (PromotedUInfixT t1 n t2) = do
+      warnIfNameIsTypeFamily n
+      go t1
+      go t2
 #endif
 
     go_kind :: Kind -> Q ()
