@@ -1,4 +1,4 @@
-## next [????.??.??]
+## 0.4.10.0 [2022.07.23]
 
 * Support `DefaultD`, `PromotedInfixT`, and `PromotedUInfixT` when building
   with `template-haskell-2.19.0.0` (GHC 9.4) or later.
