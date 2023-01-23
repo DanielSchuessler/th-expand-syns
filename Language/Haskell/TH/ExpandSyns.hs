@@ -163,6 +163,10 @@ warnIfDecIsTypeFamily = go
     go (DefaultD {}) = return ()
 #endif
 
+#if MIN_VERSION_template_haskell(2,20,0)
+    go (TypeDataD {}) = return ()
+#endif
+
 warnTypeFamiliesInType :: Type -> Q ()
 warnTypeFamiliesInType = go
   where
