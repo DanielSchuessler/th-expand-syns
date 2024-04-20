@@ -43,7 +43,7 @@ Library
                        , containers
                        , syb
                        , th-abstraction   >= 0.4.3 && < 0.8
-                       , template-haskell >= 2.5   && < 2.22
+                       , template-haskell >= 2.5   && < 2.23
     ghc-options:         -Wall
     exposed-modules:     Language.Haskell.TH.ExpandSyns
     other-modules:       Language.Haskell.TH.ExpandSyns.SemigroupCompat
