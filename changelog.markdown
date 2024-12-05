@@ -1,3 +1,7 @@
+## next [????.??.??]
+
+* Drop support for pre-8.0 versions of GHC.
+
 ## 0.4.11.0 [2023.01.31]
 
 * Support `TypeDataD` when building with `template-haskell-2.20.0.0` (GHC 9.6)

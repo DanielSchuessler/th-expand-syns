@@ -18,23 +18,13 @@ main = do
 -- GHC 7.8 always seems to consider the body of 'ForallT' to have a 'PlainTV',
 -- whereas it always has a 'KindedTV' with GHC 7.10 (in both cases, it doesn't appear
 -- to matter whether the definition of 'ForAll' is actually written with a kind signature).
-#if MIN_VERSION_template_haskell(2,10,0)
-              [t| forall a. Show a => a -> (forall (x :: *). [] x) -> (Int,[] Integer) |]
-#else
-              [t| forall a. Show a => a -> (forall x. [] x) -> (Int,[] Integer) |]
-#endif
-
-              )
+              [t| forall a. Show a => a -> (forall (x :: *). [] x) -> (Int,[] Integer) |])
 
     putStrLn "Variable capture avoidance test..."
     $(let
 
 -- See comment about 'PlainTV'/'KindedTV' above
-#if MIN_VERSION_template_haskell(2,10,0)
         y_0 = kindedTVSpecified (mkName "y_0") StarT
-#else
-        y_0 = plainTVSpecified (mkName "y_0")
-#endif
 
         expectedExpansion =
          forallT
@@ -68,12 +58,10 @@ main = do
         [t| Int'' |]
         [t| Int |])
 
-#if MIN_VERSION_template_haskell(2,8,0)
     putStrLn "Synonyms in kinds"
     $(mkTest
         (sigT (conT ''Int) (ConT ''Id `AppT` StarT))
         (sigT (conT ''Int) StarT))
-#endif
 
     $(do
         reportWarning "No warning about type families should appear after this line." -- TODO: Automate this test with a custom Quasi instance?

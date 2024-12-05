@@ -13,23 +13,14 @@ module Language.Haskell.TH.ExpandSyns(-- * Expand synonyms
 
 import Language.Haskell.TH.Datatype
 import Language.Haskell.TH.Datatype.TyVarBndr
-import Language.Haskell.TH.ExpandSyns.SemigroupCompat as Sem
 import Language.Haskell.TH hiding(cxt)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Semigroup as Sem
 import qualified Data.Set as Set
 import Data.Generics
 import Control.Monad
 import Prelude
-
-#if !(MIN_VERSION_base(4,8,0))
-import Control.Applicative
-#endif
-
--- For ghci
-#ifndef MIN_VERSION_template_haskell
-#define MIN_VERSION_template_haskell(X,Y,Z) 1
-#endif
 
 packagename :: String
 packagename = "th-expand-syns"
@@ -68,13 +59,7 @@ noWarnTypeFamilies :: SynonymExpansionSettings
 noWarnTypeFamilies = mempty { sesWarnTypeFamilies = False }
 
 warn ::  String -> Q ()
-warn msg =
-#if MIN_VERSION_template_haskell(2,8,0)
-    reportWarning
-#else
-    report False
-#endif
-      (packagename ++": WARNING: "++msg)
+warn msg = reportWarning (packagename ++": WARNING: "++msg)
 
 warnIfNameIsTypeFamily :: Name -> Q ()
 warnIfNameIsTypeFamily n = do
@@ -83,9 +68,7 @@ warnIfNameIsTypeFamily n = do
     ClassI {} -> return ()
     ClassOpI {} -> return ()
     TyConI d -> warnIfDecIsTypeFamily d
-#if MIN_VERSION_template_haskell(2,7,0)
     FamilyI d _ -> warnIfDecIsTypeFamily d -- Called for warnings
-#endif
     PrimTyConI {} -> return ()
     DataConI {} -> return ()
     VarI {} -> return ()
@@ -98,19 +81,8 @@ warnIfDecIsTypeFamily :: Dec -> Q ()
 warnIfDecIsTypeFamily = go
   where
     go (TySynD {}) = return ()
-
-#if MIN_VERSION_template_haskell(2,11,0)
     go (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = maybeWarnTypeFamily name
     go (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = maybeWarnTypeFamily name
-#else
-
-#if MIN_VERSION_template_haskell(2,9,0)
-    go (ClosedTypeFamilyD name _ _ _) = maybeWarnTypeFamily name
-#endif
-
-    go (FamilyD TypeFam name _ _) = maybeWarnTypeFamily name
-#endif
-
     go (FunD {}) = return ()
     go (ValD {}) = return ()
     go (DataD {}) = return ()
@@ -119,32 +91,16 @@ warnIfDecIsTypeFamily = go
     go (InstanceD {}) = return ()
     go (SigD {}) = return ()
     go (ForeignD {}) = return ()
-
-#if MIN_VERSION_template_haskell(2,8,0)
     go (InfixD {}) = return ()
-#endif
-
     go (PragmaD {}) = return ()
-
     -- Nothing to expand for data families, so no warning
-#if MIN_VERSION_template_haskell(2,11,0)
     go (DataFamilyD {}) = return ()
-#else
-    go (FamilyD DataFam _ _ _) = return ()
-#endif
-
     go (DataInstD {}) = return ()
     go (NewtypeInstD {}) = return ()
     go (TySynInstD {}) = return ()
-
-#if MIN_VERSION_template_haskell(2,9,0)
     go (RoleAnnotD {}) = return ()
-#endif
-
-#if MIN_VERSION_template_haskell(2,10,0)
     go (StandaloneDerivD {}) = return ()
     go (DefaultSigD {}) = return ()
-#endif
 
 #if MIN_VERSION_template_haskell(2,12,0)
     go (PatSynD {}) = return ()
@@ -173,19 +129,16 @@ warnTypeFamiliesInType = go
     go :: Type -> Q ()
     go (ConT n)     = warnIfNameIsTypeFamily n
     go (AppT t1 t2) = go t1 >> go t2
-    go (SigT t k)   = go t  >> go_kind k
+    go (SigT t k)   = go t  >> go k
     go ListT{}      = return ()
     go ArrowT{}     = return ()
     go VarT{}       = return ()
     go TupleT{}     = return ()
     go (ForallT tvbs ctxt body) = do
-      mapM_ (go_kind . tvKind) tvbs
-      mapM_ go_pred ctxt
+      mapM_ (go . tvKind) tvbs
+      mapM_ go ctxt
       go body
-#if MIN_VERSION_template_haskell(2,6,0)
     go UnboxedTupleT{} = return ()
-#endif
-#if MIN_VERSION_template_haskell(2,8,0)
     go PromotedT{}      = return ()
     go PromotedTupleT{} = return ()
     go PromotedConsT{}  = return ()
@@ -193,11 +146,7 @@ warnTypeFamiliesInType = go
     go StarT{}          = return ()
     go ConstraintT{}    = return ()
     go LitT{}           = return ()
-#endif
-#if MIN_VERSION_template_haskell(2,10,0)
     go EqualityT{} = return ()
-#endif
-#if MIN_VERSION_template_haskell(2,11,0)
     go (InfixT t1 n t2) = do
       warnIfNameIsTypeFamily n
       go t1
@@ -208,17 +157,16 @@ warnTypeFamiliesInType = go
       go t2
     go (ParensT t) = go t
     go WildCardT{} = return ()
-#endif
 #if MIN_VERSION_template_haskell(2,12,0)
     go UnboxedSumT{} = return ()
 #endif
 #if MIN_VERSION_template_haskell(2,15,0)
-    go (AppKindT t k)       = go t >> go_kind k
+    go (AppKindT t k)       = go t >> go k
     go (ImplicitParamT _ t) = go t
 #endif
 #if MIN_VERSION_template_haskell(2,16,0)
     go (ForallVisT tvbs body) = do
-      mapM_ (go_kind . tvKind) tvbs
+      mapM_ (go . tvKind) tvbs
       go body
 #endif
 #if MIN_VERSION_template_haskell(2,17,0)
@@ -233,21 +181,6 @@ warnTypeFamiliesInType = go
       warnIfNameIsTypeFamily n
       go t1
       go t2
-#endif
-
-    go_kind :: Kind -> Q ()
-#if MIN_VERSION_template_haskell(2,8,0)
-    go_kind = go
-#else
-    go_kind _ = return ()
-#endif
-
-    go_pred :: Pred -> Q ()
-#if MIN_VERSION_template_haskell(2,10,0)
-    go_pred = go
-#else
-    go_pred (ClassP _ ts)  = mapM_ go ts
-    go_pred (EqualP t1 t2) = go t1 >> go t2
 #endif
 
 maybeWarnTypeFamily :: Name -> Q ()
@@ -323,12 +256,10 @@ substInCon vt = go
           ForallC (map (mapTVKind (applySubstitution vts')) vars')
                   (applySubstitution vts' cxt)
                   (Map.foldrWithKey (\v t -> substInCon (v, t)) body vts')
-#if MIN_VERSION_template_haskell(2,11,0)
       go c@GadtC{} = errGadt c
       go c@RecGadtC{} = errGadt c
 
       errGadt c = error (packagename++": substInCon currently doesn't support GADT constructors with GHC >= 8 ("++pprint c++")")
-#endif
 
 -- Apply a substitution to something underneath a @forall@. The continuation
 -- argument provides new substitutions and fresh type variable binders to avoid
